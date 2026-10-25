@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from .domain import SafetyError, load_json
+from .domain import SafetyError, load_json, number
 from .engine import reconcile_state, run_event
 from .report import markdown, summary
 from .store import LocalStore
@@ -23,6 +23,21 @@ def main(argv=None):
     demo.add_argument("--report", default="var/paper-report.md")
     event = commands.add_parser("run", help="Process one paper event")
     event.add_argument("event_file")
+    for name, help_text in (
+        ("paper-decision", "Choose a fixed paper hypothesis, then run deterministic checks"),
+        ("paper-cycle", "Run one finite cycle with fresh input checked against the runtime clock"),
+    ):
+        decision = commands.add_parser(name, help=help_text)
+        decision.add_argument("event_file")
+        decision.add_argument("--model-id", help="Explicit Bedrock model or inference profile ID")
+        decision.add_argument("--allow-model-call", action="store_true")
+        decision.add_argument("--reserved-cost-eur", default="0")
+        decision.add_argument("--region", help="Explicit AWS region for a paid model call")
+        decision.add_argument("--profile", help="AWS SDK profile; never pass access keys")
+    abandon = commands.add_parser(
+        "allocation-abandon", help="Close an unknown inference without retrying or refunding it"
+    )
+    abandon.add_argument("event_id")
     commands.add_parser("reconcile", help="Recover confirmed paper outcomes; never place orders")
     report = commands.add_parser("report")
     report.add_argument("--json", action="store_true")
@@ -150,7 +165,38 @@ def main(argv=None):
         config = load_json(args.config)
         if args.command in {"history-import", "evaluation-plan", "evaluation-register", "evaluate"}:
             return research_command(args, config)
+        if args.command in {"paper-decision", "paper-cycle"}:
+            from .selection import bedrock_provider, run_decision
+
+            options = {}
+            model_options = args.model_id or args.allow_model_call or args.region or args.profile
+            if model_options or number(args.reserved_cost_eur) != 0:
+                if not (
+                    args.model_id
+                    and args.allow_model_call
+                    and args.region
+                    and number(args.reserved_cost_eur) > 0
+                ):
+                    raise SafetyError("model_requires_opt_in_id_region_and_positive_cost_reserve")
+                options = {
+                    "provider": bedrock_provider(args.model_id, args.region, args.profile),
+                    "provider_name": f"bedrock:{args.region}:{args.model_id}",
+                    "reserved_cost_eur": args.reserved_cost_eur,
+                }
+            runner = run_decision
+            if args.command == "paper-cycle":
+                from .cycle import run_cycle
+
+                runner = run_cycle
+            result = runner(LocalStore(args.state), config, load_json(args.event_file), **options)
+            print(json.dumps(result, indent=2))
+            return 0 if result["status"] == "completed" else 2
         store = LocalStore(args.state)
+        if args.command == "allocation-abandon":
+            from .selection import abandon_selection
+
+            print(json.dumps(abandon_selection(store, config, args.event_id), indent=2))
+            return 0
         if args.command == "demo":
             results = [run_event(store, config, event) for event in load_json(args.fixture)]
             path = Path(args.report)

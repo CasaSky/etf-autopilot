@@ -34,6 +34,13 @@ uploaded synthetic input event and a finite worker invocation. Live market data
 and financial production scheduling remain later work. The architecture supports
 Scheduler → Lambda with S3 CAS persistence, not a GitHub scheduled trading loop.
 
+The source also provides a finite `cycle` action: it reads that same fixed input,
+checks freshness against the runtime clock, chooses the configured rule without a
+model, runs deterministic checks/reconciliation and returns a report. It never
+rewrites old input dates or automatically clears a halt. It is not connected to
+the health schedule. See [bounded paper decisions](../docs/AI_DECISIONS.md) for
+local use, duplicate handling and the remaining verified-feed/alert prerequisites.
+
 ## Reviewable cost estimate
 
 Planning estimate, 25 October 2026, without free-tier credit. Compute, state-storage

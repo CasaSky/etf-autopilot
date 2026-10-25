@@ -11,8 +11,9 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
 - Dataset import, chronological evaluation and persistent holdout-exposure tracking.
 - Typed broker ETF identity checks and an offline daily-export adapter with provenance.
 - Optional read-only Public MCP and bounded diagnosis library interfaces.
-- CI definition, Terraform safety tests and a verified AWS paper-worker deployment;
-  recurring investment decisions remain unimplemented.
+- Bounded paper hypothesis choice, durable inference reservations and a scripted example.
+- A finite recurring cycle with runtime freshness and duplicate protection.
+- CI, Terraform safety tests and a verified AWS paper-worker deployment.
 
 ## Next: connect verified data
 
@@ -28,10 +29,9 @@ broker fills. Actual instrument/account compatibility is reported separately.
 
 ## Then: make the AI contribution measurable
 
-Add one bounded allocation interface that can choose among explicitly validated
-strategies and leave an evidence record. Keep the first implementation small:
-validated input, a limited response, a reserved inference budget and deterministic
-policy/execution checks. Preserve passive and without-AI comparison paths.
+The [bounded choice interface](AI_DECISIONS.md) is implemented. Next, configure an
+explicit model/rate budget and collect forward paper evidence. Preserve passive
+and without-AI paths; scripted integration tests do not measure an AI advantage.
 
 Acceptance: invalid or unavailable model output cannot place an order or alter a
 limit; calls/costs are attributed; comparisons use the same data and cash flows;
@@ -40,7 +40,7 @@ local development remain possible.
 
 ## Then: run the paper system repeatedly
 
-Connect scheduled/event-driven paper decisions, verified account reads, reconciliation
+Connect the finite cycle to verified data/account reads, the approved schedule
 and the selected alert route. AWS/model choices and spend must be explicit. Exercise
 interruption and recovery before calling the operation unattended. Live execution
 requires its own authorization and external-outcome/disclosure work.

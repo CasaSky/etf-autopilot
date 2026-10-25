@@ -7,6 +7,14 @@ from .paper import equity, reconcile
 
 
 def summary(state):
+    allocations = state["operations"].get("allocations", [])
+    pending = sum(row["status"] == "reserved" for row in allocations)
+    used = {
+        event["allocation_id"]
+        for event in state["events"].values()
+        if event.get("allocation_id") and event["result"]["status"] == "completed"
+    }
+    choices = [row for row in allocations if row["id"] in used and row["source"] != "deterministic"]
     if state["last_market"] is None:
         return {
             "mode": "paper",
@@ -14,6 +22,7 @@ def summary(state):
             "halt": state["halt"],
             "diagnosis": deterministic_diagnosis(state["halt"]),
             "accounts": {},
+            "pending_allocations": pending,
         }
     prices = state["last_market"]["prices"]
     capital = number(state["config"]["starting_cash"])
@@ -80,7 +89,13 @@ def summary(state):
         "cash_flow_policy": "initial_deposit_only",
         "diagnosis": deterministic_diagnosis(effective_halt),
         "accounts": accounts,
+        "pending_allocations": pending,
+        "allocation_choices": [
+            {key: row[key] for key in ("event_id", "source", "strategy", "reserved_cost_eur")}
+            for row in choices
+        ],
         "comparable": successful
+        and not pending
         and not state["halt"]
         and all(a["reconciliation"] == "matched" for a in accounts.values()),
         "limitations": [
@@ -90,18 +105,22 @@ def summary(state):
             "EUR only; no FX. Fund expenses/dividends/taxes are not modeled in fixtures.",
             "Operations are supplied estimates/reservations, not an AWS billing feed.",
             "Real ETF identities, total-return history and account entitlements remain unverified.",
+            "A forward workflow halt stops all accounts; such comparisons are marked invalid.",
         ],
     }
 
 
 def markdown(state):
     report = summary(state)
+    status = report["halt"] or (
+        "awaiting_allocation_result" if report["pending_allocations"] else "operational"
+    )
     lines = [
         "# ETF Autopilot — paper workflow",
         "",
         "**Synthetic fixtures. Live trading unavailable. No profitability claim.**",
         "",
-        f"Status: {report['halt'] or 'operational'}; source: synthetic_fixture.",
+        f"Status: {status}; source: synthetic_fixture.",
         "",
     ]
     if not report["accounts"]:
@@ -145,10 +164,20 @@ def markdown(state):
         "Passive uses the same starting cash, dates, fees, reserve and risk constraints; "
         "it keeps the fixed allocation without the trend filter and assumes no app charges. "
         "Without-AI shares routine operating costs and removes only inference charges. "
-        "No model controls allocation.",
+        + (
+            "The strategy account used bounded allocation choices; "
+            "without-AI kept its configured rule."
+            if report["allocation_choices"]
+            else "No model controls allocation."
+        ),
         "",
         "## Limits",
         "",
     ]
+    for choice in report["allocation_choices"]:
+        lines.append(
+            f"Allocation {choice['event_id']}: {choice['strategy']} from {choice['source']}; "
+            f"reserved inference expense EUR {choice['reserved_cost_eur']}."
+        )
     lines.extend(f"- {line}" for line in report["limitations"])
     return "\n".join(lines) + "\n"

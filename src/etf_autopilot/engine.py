@@ -74,7 +74,7 @@ def account_operations(state, name):
     return total
 
 
-def run_event(store, config, event, *, fault=None):
+def run_event(store, config, event, *, fault=None, allocation_id=None):
     """fault is test-only paper simulation; never read from an event or model output."""
     validate_config(config)
     if "data_contract" in config:
@@ -90,7 +90,7 @@ def run_event(store, config, event, *, fault=None):
         assert_bound(state, config)
         prior = state["events"].get(event["id"])
         if prior:
-            if prior["hash"] != fingerprint:
+            if prior["hash"] != fingerprint or prior.get("allocation_id") != allocation_id:
                 raise SafetyError("event_id_payload_conflict")
             return {**prior["result"], "duplicate": True}, state
         result = {
@@ -131,6 +131,9 @@ def run_event(store, config, event, *, fault=None):
             if month in state["slots"]:
                 result["status"] = "skipped_monthly_cadence"
             else:
+                from .selection import selected_strategy
+
+                chosen = selected_strategy(state, config, event, allocation_id)
                 plans = {}
                 for name, account in state["accounts"].items():
                     cost = account_operations(state, name)
@@ -140,7 +143,11 @@ def run_event(store, config, event, *, fault=None):
                     peak = max(number(account["peak_nav"]), current_nav)
                     if 1 - current_nav / peak > number(config["risk"]["max_drawdown"]):
                         raise SafetyError("drawdown_limit_exceeded")
-                    strategy = "passive" if name == "passive" else config["strategy"]
+                    strategy = (
+                        "passive"
+                        if name == "passive"
+                        else (chosen if name == "strategy" else config["strategy"])
+                    )
                     targets = allocation(event["market"], config, strategy)
                     plans[name] = plan(account, event["market"], targets, config, day)
                 # Reserve the month before any submission, including uncertain/partial outcomes.
@@ -198,6 +205,8 @@ def run_event(store, config, event, *, fault=None):
                 mark(account, event, config["starting_cash"], cost)
             state["last_market"] = deepcopy(event["market"])
         state["events"][event["id"]] = {"hash": fingerprint, "result": deepcopy(result)}
+        if allocation_id is not None:
+            state["events"][event["id"]]["allocation_id"] = allocation_id
         state["audit"].append({"type": "event", **result})
         return result, state
 

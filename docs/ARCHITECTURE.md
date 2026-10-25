@@ -21,7 +21,10 @@ mock HTTP. No MCP protocol or hosted broker server is rebuilt. A future SDK majo
 upgrade needs contract validation.
 
 The application never treats an LLM response as an order. Routine pricing,
-allocation, risk, accounting and reconciliation do not call a model. The small
+risk, accounting and reconciliation do not call a model. An optional
+[bounded choice](AI_DECISIONS.md) can select one of the two fixed hypotheses for
+the strategy account. Its durable receipt is checked before deterministic planning;
+the comparison accounts preserve their rules. The small
 optional diagnosis interface accepts only a stable failure code and returns an
 allowed inspection action. It has no broker connection or policy mutation method.
 There is no autonomous repair deployment or strategy-promotion path in this release.
@@ -110,8 +113,9 @@ never tool arguments or prompts; errors use fixed codes without upstream bodies.
 
 Fixture contracts are explicitly synthetic protocol envelopes. A successful MCP
 protocol check does not prove instrument eligibility or live domain mappings.
-Account-specific schemas/response mapping remain unverified until the user securely
-configures credentials. No guessed REST response fields are used as a live adapter.
+Read-only protocol access and ETF catalog identity have been checked. Portfolio
+domain mapping and ticker responses still require independent contract validation.
+No guessed REST response fields are used as a live adapter.
 The new Public MCP is the only broker route; Fusion, Earn and crypto transfers are
 outside scope. There is no duplicate REST execution implementation.
 

@@ -23,20 +23,31 @@ def handler(event, context):
     config = load_json(Path(__file__).with_name("paper.json"))
     action = event.get("action")
     try:
-        if action == "run":
+        if action in {"run", "cycle"}:
             # Input key is fixed by the deployment, never selected by a model or request.
             obj = s3.get_object(Bucket=store.bucket, Key="paper/inputs/current.json")
             if obj["ContentLength"] > MAX_STATE_BYTES:
                 raise SafetyError("input_too_large")
             payload = json.loads(obj["Body"].read(), parse_float=str)
-            result = run_event(store, config, payload)
+            if action == "cycle":
+                from .cycle import run_cycle
+
+                result = run_cycle(store, config, payload)
+            else:
+                result = run_event(store, config, payload)
         elif action == "reconcile":
             result = reconcile_state(store, config)
         elif action == "health":
             state = store.read()
             report = summary(state)
             result = {
-                "status": "halted" if report["halt"] else "operational",
+                "status": (
+                    "halted"
+                    if report["halt"]
+                    else "awaiting_allocation_result"
+                    if report["pending_allocations"]
+                    else "operational"
+                ),
                 "mode": "paper",
                 "diagnosis": report["halt"],
                 "events": len(state["events"]),

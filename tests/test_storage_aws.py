@@ -184,6 +184,56 @@ def test_lambda_health_does_not_call_broker_or_model(monkeypatch, s3, config):
         stub.assert_no_pending_responses()
 
 
+def test_lambda_health_exposes_unknown_allocation_without_retry(monkeypatch, s3, config):
+    monkeypatch.setenv("STATE_BUCKET", "fixture-bucket")
+    monkeypatch.setattr(boto3, "client", lambda *args, **kwargs: s3)
+    import etf_autopilot.aws_handler as module
+
+    monkeypatch.setattr(module, "load_json", lambda _: config)
+    state = initial_state(config)
+    state["operations"]["allocations"] = [
+        {"id": "allocation:fixture", "status": "reserved", "source": "scripted_fixture"}
+    ]
+    with Stubber(s3) as stub:
+        stub.add_response(
+            "get_object",
+            get_response(state),
+            {"Bucket": "fixture-bucket", "Key": "paper/state.json"},
+        )
+        result = handler({"action": "health"}, None)
+        assert result["status"] == "awaiting_allocation_result" and result["ai"] == "disabled"
+        stub.assert_no_pending_responses()
+
+
+def test_lambda_cycle_uses_runtime_clock_and_never_writes_stale_input(
+    monkeypatch, s3, config, events
+):
+    from datetime import UTC, datetime
+
+    import etf_autopilot.aws_handler as module
+    import etf_autopilot.cycle as cycle
+
+    class Clock:
+        @staticmethod
+        def now(zone):
+            return datetime(2026, 10, 25, tzinfo=UTC)
+
+    monkeypatch.setattr(cycle, "datetime", Clock)
+    monkeypatch.setenv("STATE_BUCKET", "fixture-bucket")
+    monkeypatch.setattr(boto3, "client", lambda *args, **kwargs: s3)
+    monkeypatch.setattr(module, "load_json", lambda _: config)
+    body = json.dumps(events[0]).encode()
+    with Stubber(s3) as stub:
+        stub.add_response(
+            "get_object",
+            {"Body": io.BytesIO(body), "ContentLength": len(body)},
+            {"Bucket": "fixture-bucket", "Key": "paper/inputs/current.json"},
+        )
+        result = handler({"action": "cycle", "at": events[0]["at"]}, None)
+        assert result["status"] == "waiting_for_input" and result["orders"] == 0
+        stub.assert_no_pending_responses()
+
+
 def test_lambda_package_contains_only_allowlisted_source_and_fixture_config():
     package_lambda()
     with zipfile.ZipFile(ROOT / "var/lambda.zip") as archive:

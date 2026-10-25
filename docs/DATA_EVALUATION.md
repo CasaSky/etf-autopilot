@@ -141,8 +141,9 @@ prototype without exposure records must first be registered again against their
 original dataset/config to backfill the audit; they are not discarded.
 
 No candidate is automatically promoted. These are two fixed hypotheses with a
-preregistered replay. An experiment manager, actual AI allocation and promotion
-evaluation remain later integrations in the original system plan.
+preregistered replay. The separate [bounded paper choice](AI_DECISIONS.md) does not
+run in this historical evaluator. Experiment management and promotion evaluation
+remain later integrations in the original system plan.
 
 ## Run the synthetic contract check
 
@@ -183,7 +184,8 @@ decisions, simulated broker operations, ledger and valuation history for inspect
 
 A verified provider adapter can feed the same interface without changing risk,
 execution accounting or the research strategy. Read-only Bitpanda validation then
-establishes real instrument/account mappings. Scheduled forward paper operation
-and bounded AI allocation remain subsequent parts of the existing plan. No cloud,
+establishes real instrument/account mappings. The bounded choice and finite cycle
+are implemented separately; a verified forward feed and unattended operation
+remain subsequent parts of the existing plan. No cloud,
 broker write permission, paid subscription or model call is needed to exercise the
 new importer and evaluation controls locally.

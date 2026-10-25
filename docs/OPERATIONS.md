@@ -43,7 +43,10 @@ Defaults: zero model calls, EUR 1 monthly estimated operations budget, 40 new
 market events per month, at most 2,000 input-token budget and 400 output-token
 budget. Prompts/responses also have conservative UTF-8 byte caps; failures are
 charged the full configured reservation. Model use is an explicit integration,
-not a background loop. The current CLI and AWS worker never invoke it.
+not a background loop. The CLI's `paper-decision` / `paper-cycle` commands support
+explicit model opt-in; the AWS worker has no configured model or model permission.
+See [bounded decisions](AI_DECISIONS.md) for the choice contract, scripted example,
+durable reservation and unknown-inference recovery.
 
 The optional diagnosis API persists a positive worst-case cost reservation and
 call count before inference. Repeating its ID cannot spend again; a crash after

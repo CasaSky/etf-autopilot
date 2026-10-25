@@ -8,8 +8,8 @@ AI can improve an investment process after trading and operating costs.
 
 **Early development · Paper only · Python 3.13+ · MIT**
 
-The paper engine and evaluation tools work today. AI allocation, verified market
-feeds and the recurring investment loop are still being implemented. Current
+The paper engine, evaluation tools and bounded allocation interface work today.
+Verified market feeds and unattended operation are still being implemented. Current
 examples use synthetic data and make no investment-performance claim.
 
 ## Try it with one command
@@ -64,8 +64,9 @@ framework, server or cloud deployment is required to understand the core.
 | Historical import and chronological evaluation | Working; supplied examples are synthetic |
 | Bitpanda Public MCP | Protocol read verified; typed ETF identity; portfolio mapping pending |
 | AI diagnosis | Optional library adapter; disabled by default |
-| AI allocation and experiment orchestration | Planned |
-| Recurring AWS investment operation | Planned; the paper worker is verified, health schedule disabled |
+| AI allocation | Bounded paper choice implemented; scripted example, no measured AI advantage |
+| Recurring paper entry point | Fresh-input cycle implemented; verified feed and unattended setup pending |
+| Recurring AWS investment operation | Not enabled; paper worker verified, health schedule disabled |
 | Live trading | Unavailable |
 
 ## Explore or contribute
@@ -74,6 +75,7 @@ framework, server or cloud deployment is required to understand the core.
 - [Architecture](docs/ARCHITECTURE.md): understand the core and its boundaries.
 - [Data and evaluation](docs/DATA_EVALUATION.md): import data and run a fixed protocol.
 - [Provider import](docs/PROVIDER_IMPORT.md): convert daily exports with explicit timing assumptions.
+- [Bounded decisions](docs/AI_DECISIONS.md): try the scripted choice workflow and understand recovery.
 - [Roadmap](docs/ROADMAP.md): see the next useful pieces and starter contributions.
 - [Contributing](CONTRIBUTING.md): set up development and make a focused change.
 - [AWS deployment](deploy/README.md): reproduce the isolated paper worker with Terraform.
