@@ -1,0 +1,18 @@
+{
+  "provenance": "synthetic_protocol_contract_not_a_live_Bitpanda_capture",
+  "tools": [
+    {
+      "name": "get_portfolio_holdings",
+      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
+      "outputSchema": {
+        "type": "object", "required": ["fixture_holdings"],
+        "properties": {"fixture_holdings": {"type": "array"}}
+      }
+    },
+    {"name": "accept_quote", "inputSchema": {"type": "object"}},
+    {"name": "earn_stake", "inputSchema": {"type": "object"}}
+  ],
+  "result": {
+    "content": [], "structuredContent": {"fixture_holdings": []}, "isError": false
+  }
+}

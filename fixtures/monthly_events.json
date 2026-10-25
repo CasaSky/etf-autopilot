@@ -1,0 +1,260 @@
+[
+  {
+    "id": "paper-2026-08",
+    "at": "2026-08-23T10:00:00Z",
+    "operating_cost_eur": "0.01",
+    "market": {
+      "source": "synthetic_fixture",
+      "as_of": "2026-08-23T10:00:00Z",
+      "currency": "EUR",
+      "prices": {
+        "SIM_GLOBAL_EQUITY": "100",
+        "SIM_EUR_BONDS": "50"
+      },
+      "history": [
+        {
+          "at": "2025-10-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "90",
+            "SIM_EUR_BONDS": "45.0"
+          }
+        },
+        {
+          "at": "2025-11-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "91",
+            "SIM_EUR_BONDS": "45.4"
+          }
+        },
+        {
+          "at": "2025-12-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "92",
+            "SIM_EUR_BONDS": "45.8"
+          }
+        },
+        {
+          "at": "2026-01-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "93",
+            "SIM_EUR_BONDS": "46.2"
+          }
+        },
+        {
+          "at": "2026-02-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "94",
+            "SIM_EUR_BONDS": "46.6"
+          }
+        },
+        {
+          "at": "2026-03-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "95",
+            "SIM_EUR_BONDS": "47.0"
+          }
+        },
+        {
+          "at": "2026-04-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "96",
+            "SIM_EUR_BONDS": "47.4"
+          }
+        },
+        {
+          "at": "2026-05-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "97",
+            "SIM_EUR_BONDS": "47.8"
+          }
+        },
+        {
+          "at": "2026-06-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "98",
+            "SIM_EUR_BONDS": "48.2"
+          }
+        },
+        {
+          "at": "2026-07-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "99",
+            "SIM_EUR_BONDS": "48.6"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "paper-2026-09",
+    "at": "2026-09-23T10:00:00Z",
+    "operating_cost_eur": "0.01",
+    "market": {
+      "source": "synthetic_fixture",
+      "as_of": "2026-09-23T10:00:00Z",
+      "currency": "EUR",
+      "prices": {
+        "SIM_GLOBAL_EQUITY": "104",
+        "SIM_EUR_BONDS": "50.5"
+      },
+      "history": [
+        {
+          "at": "2025-11-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "91",
+            "SIM_EUR_BONDS": "46.0"
+          }
+        },
+        {
+          "at": "2025-12-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "92",
+            "SIM_EUR_BONDS": "46.4"
+          }
+        },
+        {
+          "at": "2026-01-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "93",
+            "SIM_EUR_BONDS": "46.8"
+          }
+        },
+        {
+          "at": "2026-02-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "94",
+            "SIM_EUR_BONDS": "47.2"
+          }
+        },
+        {
+          "at": "2026-03-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "95",
+            "SIM_EUR_BONDS": "47.6"
+          }
+        },
+        {
+          "at": "2026-04-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "96",
+            "SIM_EUR_BONDS": "48.0"
+          }
+        },
+        {
+          "at": "2026-05-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "97",
+            "SIM_EUR_BONDS": "48.4"
+          }
+        },
+        {
+          "at": "2026-06-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "98",
+            "SIM_EUR_BONDS": "48.8"
+          }
+        },
+        {
+          "at": "2026-07-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "99",
+            "SIM_EUR_BONDS": "49.2"
+          }
+        },
+        {
+          "at": "2026-08-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "100",
+            "SIM_EUR_BONDS": "49.6"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "paper-2026-10",
+    "at": "2026-10-23T10:00:00Z",
+    "operating_cost_eur": "0.01",
+    "market": {
+      "source": "synthetic_fixture",
+      "as_of": "2026-10-23T10:00:00Z",
+      "currency": "EUR",
+      "prices": {
+        "SIM_GLOBAL_EQUITY": "92",
+        "SIM_EUR_BONDS": "51"
+      },
+      "history": [
+        {
+          "at": "2025-12-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "92",
+            "SIM_EUR_BONDS": "47.0"
+          }
+        },
+        {
+          "at": "2026-01-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "93",
+            "SIM_EUR_BONDS": "47.4"
+          }
+        },
+        {
+          "at": "2026-02-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "94",
+            "SIM_EUR_BONDS": "47.8"
+          }
+        },
+        {
+          "at": "2026-03-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "95",
+            "SIM_EUR_BONDS": "48.2"
+          }
+        },
+        {
+          "at": "2026-04-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "96",
+            "SIM_EUR_BONDS": "48.6"
+          }
+        },
+        {
+          "at": "2026-05-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "97",
+            "SIM_EUR_BONDS": "49.0"
+          }
+        },
+        {
+          "at": "2026-06-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "98",
+            "SIM_EUR_BONDS": "49.4"
+          }
+        },
+        {
+          "at": "2026-07-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "99",
+            "SIM_EUR_BONDS": "49.8"
+          }
+        },
+        {
+          "at": "2026-08-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "100",
+            "SIM_EUR_BONDS": "50.2"
+          }
+        },
+        {
+          "at": "2026-09-01T00:00:00+00:00",
+          "prices": {
+            "SIM_GLOBAL_EQUITY": "101",
+            "SIM_EUR_BONDS": "50.6"
+          }
+        }
+      ]
+    }
+  }
+]

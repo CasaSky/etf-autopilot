@@ -1,0 +1,23 @@
+name: Feature or improvement
+description: Propose a focused improvement to the investment and operations system.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe a concrete workflow or example.
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Smallest useful approach
+      description: Explain the change and how we could tell it works.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Existing behavior or alternatives
+      description: Link related documentation, issues or relevant primary sources.

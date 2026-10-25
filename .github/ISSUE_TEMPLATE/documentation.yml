@@ -1,0 +1,16 @@
+name: Documentation or example
+description: Improve a confusing explanation, command or example.
+labels: [documentation]
+body:
+  - type: textarea
+    id: location
+    attributes:
+      label: What were you trying to do?
+      description: Link the page or example and explain where it became unclear.
+    validations:
+      required: true
+  - type: textarea
+    id: improvement
+    attributes:
+      label: Suggested improvement
+      description: A clearer explanation, corrected command or useful missing example.

@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible problem using synthetic or public data.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please keep credentials, holdings, account details and private logs out of this issue. Use the security reporting process for vulnerabilities.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Commands, small public or synthetic inputs, and relevant redacted output.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version, operating system, and commit or release.

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "mode": "paper",
+  "currency": "EUR",
+  "starting_cash": "5000.00",
+  "strategy": "slow_trend",
+  "lookback_months": 10,
+  "assets": {
+    "SIM_GLOBAL_EQUITY": {
+      "label": "Synthetic broad UCITS equity ETF",
+      "isin": "SIMULATED-EQUITY",
+      "class": "equity",
+      "currency": "EUR",
+      "type": "equity_security",
+      "ucits": true,
+      "source": "synthetic_fixture",
+      "weight": "0.70"
+    },
+    "SIM_EUR_BONDS": {
+      "label": "Synthetic EUR UCITS bond ETF",
+      "isin": "SIMULATED-BONDS",
+      "class": "bond",
+      "currency": "EUR",
+      "type": "equity_security",
+      "ucits": true,
+      "source": "synthetic_fixture",
+      "weight": "0.20"
+    }
+  },
+  "risk": {
+    "min_cash_weight": "0.10",
+    "max_position_weight": "0.75",
+    "max_equity_weight": "0.75",
+    "max_drawdown": "0.20",
+    "max_turnover_weight": "0.90",
+    "max_daily_buy_eur": "4500.00",
+    "max_daily_sell_eur": "4500.00",
+    "min_order_eur": "250.00",
+    "max_data_age_hours": "36",
+    "max_spread_bps": "30",
+    "rebalance_band_weight": "0.03"
+  },
+  "execution": {"fee_eur": "1.00", "spread_bps": "10", "quote_ttl_seconds": 30},
+  "operations": {
+    "monthly_budget_eur": "1.00",
+    "max_model_calls": 0,
+    "max_input_tokens": 2000,
+    "max_output_tokens": 400,
+    "max_events_per_month": 40
+  }
+}

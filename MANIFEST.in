@@ -1,0 +1,13 @@
+include LICENSE README.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md requirements.lock
+include .gitignore .gitattributes .editorconfig
+recursive-include config *.json
+recursive-include fixtures *.json *.csv
+recursive-include examples *.py
+recursive-include scripts *.py
+recursive-include tests *.py
+include docs/README.md docs/ARCHITECTURE.md docs/BROKER.md docs/DATA_EVALUATION.md
+include docs/OPERATIONS.md docs/PUBLISHING.md docs/ROADMAP.md docs/paper-demo.md
+include docs/PRIVACY.md
+recursive-include deploy *.md *.yaml
+recursive-include .github *.md *.yml
+include .githooks/pre-commit .githooks/pre-push

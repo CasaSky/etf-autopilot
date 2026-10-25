@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+root=$(git rev-parse --show-toplevel)
+if command -v python3 >/dev/null 2>&1; then
+    exec python3 "$root/scripts/check_private_files.py" --history --push-stdin
+fi
+exec python "$root/scripts/check_private_files.py" --history --push-stdin
