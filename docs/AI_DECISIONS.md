@@ -82,7 +82,9 @@ The CLI supports an explicit model ID, region, positive worst-case reservation a
 The optional `aws` dependency and the operator's model access are required. There
 is no default model and no model call in the deployed worker. The SDK client is
 created after reservation, with one total attempt and bounded timeouts. Converse
-has no tools or broker access. No actual Bedrock inference has been used as a test.
+has no tools or broker access. One explicitly authorised Nova Micro integration
+call with fictional inputs passed, including stored-result replay without a second
+call. This verifies the provider interface; it does not measure investment returns.
 The request uses AWS's [Converse interface](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
 
 ```sh
@@ -109,6 +111,14 @@ Repeated delivery uses the existing event and allocation receipts. The financial
 engine reconciles before and after simulated execution, then the cycle returns a
 report. It exits; an external scheduler supplies future ticks. The AWS worker's
 `cycle` action reads only its fixed prepared input key and makes no model call.
+
+When the two hypotheses produce identical target weights, a recurring cycle uses
+the configured deterministic rule and records `inference_skipped` rather than
+reserving a pointless model call. Existing model receipts, including unknown calls,
+are preserved and replayed under their original context. The explicit
+`paper-decision` command can still exercise the provider interface on such an input;
+the one-call Bedrock integration check used fictional data and established protocol
+compatibility only. It supplies no evidence of added investment returns.
 
 This entry point currently accepts the synthetic forward-event contract. A real
 feed, account mapping, approved model configuration and alert destination remain

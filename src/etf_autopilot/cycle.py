@@ -4,8 +4,36 @@ from datetime import UTC, datetime
 
 from .domain import SafetyError, instant, number, validate_config
 from .report import summary
-from .selection import run_decision
-from .strategy import validate_market
+from .selection import run_decision, validate_provider_options
+from .strategy import allocation, validate_market
+
+
+def _equivalent_choice(store, config, event, options):
+    if options.get("provider") is None or allocation(
+        event["market"], config, "passive"
+    ) != allocation(event["market"], config, "slow_trend"):
+        return False
+    try:
+        state = store.read()
+    except SafetyError as exc:
+        if str(exc) != "state_not_initialized":
+            raise
+        state = None
+    if state is not None:
+        from .engine import assert_bound
+
+        assert_bound(state, config)
+        prior = next(
+            (
+                row
+                for row in state["operations"].get("allocations", [])
+                if row["event_id"] == event["id"]
+            ),
+            None,
+        )
+        if prior is not None and prior["source"] != "deterministic":
+            return False  # Preserve a recorded/inflight model receipt, never retrofit it.
+    return True
 
 
 def run_cycle(store, config, event, *, now=None, **selection_options):
@@ -39,10 +67,21 @@ def run_cycle(store, config, event, *, now=None, **selection_options):
         reason = "fresh_runtime_input_required"
     if reason:
         return {"status": "waiting_for_input", "mode": "paper", "diagnosis": reason, "orders": 0}
-    decision = run_decision(store, config, event, **selection_options)
-    return {
+    if set(selection_options) - {"provider", "provider_name", "reserved_cost_eur"}:
+        raise SafetyError("unsupported_cycle_selection_option")
+    validate_provider_options(
+        selection_options.get("provider"),
+        selection_options.get("provider_name"),
+        selection_options.get("reserved_cost_eur", "0"),
+    )
+    skip = _equivalent_choice(store, config, event, selection_options)
+    decision = run_decision(store, config, event, **({} if skip else selection_options))
+    result = {
         "status": decision["status"],
         "mode": "paper",
         "decision": decision,
         "report": summary(store.read()),
     }
+    if skip:
+        result["inference_skipped"] = "equivalent_candidate_allocations"
+    return result

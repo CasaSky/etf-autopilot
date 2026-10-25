@@ -58,6 +58,19 @@ def _context_digest(config, event, context, source):
     )
 
 
+def validate_provider_options(provider, provider_name, reserved_cost_eur):
+    if provider is not None and (
+        not isinstance(provider_name, str)
+        or not 1 <= len(provider_name) <= 160
+        or any(ord(char) < 32 for char in provider_name)
+    ):
+        raise SafetyError("invalid_allocation_provider_name")
+    amount = number(reserved_cost_eur)
+    if provider is None and amount != 0:
+        raise SafetyError("inference_reservation_requires_provider")
+    return amount
+
+
 def select_strategy(
     store, config, event, *, provider=None, provider_name=None, reserved_cost_eur="0"
 ):
@@ -76,15 +89,7 @@ def select_strategy(
         validate_market(event, config)
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         raise SafetyError("invalid_market_input") from exc
-    if provider is not None and (
-        not isinstance(provider_name, str)
-        or not 1 <= len(provider_name) <= 160
-        or any(ord(char) < 32 for char in provider_name)
-    ):
-        raise SafetyError("invalid_allocation_provider_name")
-    amount = number(reserved_cost_eur)
-    if provider is None and amount != 0:
-        raise SafetyError("inference_reservation_requires_provider")
+    amount = validate_provider_options(provider, provider_name, reserved_cost_eur)
     context = _context(config, event)
     prompt = canonical(context)
     event_hash, config_hash = digest(event), digest(config)
