@@ -44,17 +44,25 @@ def main(argv=None):
     broker = commands.add_parser("broker-check", help="Explicit read-only live account check")
     broker.add_argument("--allow-account-read", action="store_true", required=True)
     broker.add_argument("--expires-at", help="UTC expiry timestamp; securely prompt for the key")
-    asset = commands.add_parser("broker-asset", help="Read and bind one real ETF catalog identity")
-    asset.add_argument("--isin", required=True)
-    asset.add_argument("--asset-id", help="Require a previously reviewed listing UUID")
-    asset.add_argument("--expires-at", help="UTC expiry timestamp; securely prompt for the key")
-    asset.add_argument("--out", required=True, help="New immutable identity evidence JSON")
+    for name, help_text in (
+        ("broker-asset", "Read and bind one real ETF catalog identity"),
+        ("broker-market", "Capture public identity/ticker data for private contract review"),
+    ):
+        asset = commands.add_parser(name, help=help_text)
+        asset.add_argument("--isin", required=True)
+        asset.add_argument("--asset-id", help="Require a previously reviewed listing UUID")
+        asset.add_argument("--expires-at", help="UTC expiry timestamp; securely prompt for the key")
+        asset.add_argument("--out", required=True, help="New immutable evidence JSON")
     verify_asset = commands.add_parser(
         "asset-verify", help="Check a saved catalog response offline"
     )
     verify_asset.add_argument("response")
     verify_asset.add_argument("--isin", required=True)
     verify_asset.add_argument("--asset-id")
+    verify_market = commands.add_parser(
+        "market-verify", help="Inspect captured ticker fields offline without assuming freshness"
+    )
+    verify_market.add_argument("evidence")
     history = commands.add_parser(
         "history-import", help="Validate a local monthly return-index CSV"
     )
@@ -88,6 +96,19 @@ def main(argv=None):
     evaluate.add_argument("--out-dir", default="var/evaluations")
     args = parser.parse_args(argv)
     try:
+        if args.command == "market-verify":
+            from .market import ticker_receipt
+
+            path = Path(args.evidence)
+            if path.stat().st_size > 1_000_000:
+                raise SafetyError("broker_response_too_large")
+            print(
+                json.dumps(
+                    {"status": "ticker_contract_checked", **ticker_receipt(load_json(path))},
+                    indent=2,
+                )
+            )
+            return 0
         if args.command == "asset-verify":
             from .instruments import asset_uuid, resolve_etf
 
@@ -114,8 +135,8 @@ def main(argv=None):
             identity = resolve_etf(payload, args.isin, expected_id)
             print(json.dumps({"status": "verified_local_payload", "identity": identity}, indent=2))
             return 0
-        if args.command in {"broker-check", "broker-asset"}:
-            if args.command == "broker-asset":
+        if args.command in {"broker-check", "broker-asset", "broker-market"}:
+            if args.command in {"broker-asset", "broker-market"}:
                 from .instruments import asset_uuid, validate_isin
 
                 validate_isin(args.isin)
@@ -127,6 +148,7 @@ def main(argv=None):
                     check_account,
                     credentials_from_environment,
                     inspect_asset,
+                    inspect_market,
                 )
             except ImportError:
                 raise SafetyError("broker_dependencies_missing_install_broker_extra") from None
@@ -138,11 +160,26 @@ def main(argv=None):
                 if args.expires_at
                 else credentials_from_environment()
             )
-            if args.command == "broker-asset":
+            if args.command in {"broker-asset", "broker-market"}:
                 from .history import write_immutable_json
 
-                evidence = asyncio.run(inspect_asset(credentials, args.isin, args.asset_id))
+                inspect = inspect_market if args.command == "broker-market" else inspect_asset
+                evidence = asyncio.run(inspect(credentials, args.isin, args.asset_id))
                 write_immutable_json(args.out, evidence)
+                if args.command == "broker-market":
+                    print(
+                        json.dumps(
+                            {
+                                "status": "market_contract_saved",
+                                "path": str(Path(args.out).resolve()),
+                                "evidence_id": evidence["evidence_id"],
+                                "data_mapping": evidence["data_mapping"],
+                                "trading": "unavailable",
+                            },
+                            indent=2,
+                        )
+                    )
+                    return 0
                 print(json.dumps({"status": "identity_saved", **evidence}, indent=2))
                 return 0
             print(json.dumps(asyncio.run(check_account(credentials)), indent=2))

@@ -191,17 +191,21 @@ async def check_account(credentials):
         }
 
 
-async def inspect_asset(credentials, isin, expected_asset_id=None):
-    """One catalog read with explicit identity checks; no account data or ticker call."""
+def _asset_arguments(isin, expected_asset_id):
     validate_isin(isin)
     if expected_asset_id is not None:
         asset_uuid(expected_asset_id)
+    return (
+        {"id": asset_uuid(expected_asset_id), "page_size": 1}
+        if expected_asset_id is not None
+        else {"isin": isin, "type": "equity_security", "group": "equity_etf", "page_size": 100}
+    )
+
+
+async def inspect_asset(credentials, isin, expected_asset_id=None):
+    """One catalog read with explicit identity checks; no account data or ticker call."""
+    arguments = _asset_arguments(isin, expected_asset_id)
     async with connect(credentials) as client:
-        arguments = (
-            {"id": asset_uuid(expected_asset_id), "page_size": 1}
-            if expected_asset_id is not None
-            else {"isin": isin, "type": "equity_security", "group": "equity_etf", "page_size": 100}
-        )
         payload = await client.call("list_assets", arguments)
         identity = resolve_etf(payload, isin, expected_asset_id)
         evidence = {
@@ -211,6 +215,27 @@ async def inspect_asset(credentials, isin, expected_asset_id=None):
             "catalog_hash": digest(client.catalog),
             "identity": identity,
             "purpose": "catalog_identity_only",
+            "account_eligibility": "unverified",
+            "trading": "unavailable",
+        }
+        return {**evidence, "evidence_id": digest(evidence)}
+
+
+async def inspect_market(credentials, isin, expected_asset_id=None):
+    """Capture two public-data reads for contract review, never guess ticker fields."""
+    arguments = _asset_arguments(isin, expected_asset_id)
+    async with connect(credentials) as client:
+        identity = resolve_etf(await client.call("list_assets", arguments), isin, expected_asset_id)
+        ticker = await client.call("get_ticker", {"asset_id": identity["broker_asset_id"]})
+        evidence = {
+            "version": 1,
+            "source": ENDPOINT,
+            "retrieved_at": datetime.now(UTC).isoformat(),
+            "catalog_hash": digest(client.catalog),
+            "identity": identity,
+            "ticker_response": ticker,
+            "purpose": "public_market_contract_review_only",
+            "data_mapping": "unverified_not_accepted_by_engine",
             "account_eligibility": "unverified",
             "trading": "unavailable",
         }

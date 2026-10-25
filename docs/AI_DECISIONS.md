@@ -32,6 +32,10 @@ deterministic candidate weight sets. It contains no broker tool descriptions,
 credentials, holdings, dates or ETF identifiers. The response must contain exactly
 one key: `{"strategy":"passive"}` or `{"strategy":"slow_trend"}`. Extra keys,
 duplicate JSON keys, unsupported values and oversized output fail closed.
+The instructions state the objective as long-term net portfolio growth after
+costs within the fixed policy. The receipt binds those instructions by hash too;
+changed inference instructions require a new experiment rather than silently
+reusing a prepared choice. Sparse market features do not predict future returns.
 
 Only the `strategy` account uses this choice. The `without_ai` account retains the
 configured rule and routine operating costs; `passive` retains its fixed weights

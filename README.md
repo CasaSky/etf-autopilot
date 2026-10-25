@@ -62,7 +62,7 @@ framework, server or cloud deployment is required to understand the core.
 |---|---|
 | Paper orders, accounting and recovery | Verified locally and in the AWS paper worker |
 | Historical import and chronological evaluation | Working; supplied examples are synthetic |
-| Bitpanda Public MCP | Protocol read verified; typed ETF identity; portfolio mapping pending |
+| Bitpanda Public MCP | Read verified; typed ETF/ticker evidence; timestamped feed and portfolio mapping pending |
 | AI diagnosis | Optional library adapter; disabled by default |
 | AI allocation | Bounded paper choice implemented; scripted example, no measured AI advantage |
 | Recurring paper entry point | Fresh-input cycle implemented; verified feed and unattended setup pending |

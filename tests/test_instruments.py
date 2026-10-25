@@ -133,6 +133,53 @@ def test_metadata_read_is_one_call_and_saves_only_identity(monkeypatch, catalog_
     )
 
 
+def test_market_contract_capture_uses_verified_uuid_and_does_not_map_prices(
+    monkeypatch, catalog_payload
+):
+    calls = []
+
+    class Client:
+        catalog = {"list_assets": {}, "get_ticker": {}}
+
+        async def call(self, name, arguments):
+            calls.append((name, arguments))
+            return catalog_payload if name == "list_assets" else {"synthetic_ticker_field": "123"}
+
+    @asynccontextmanager
+    async def connect(_):
+        yield Client()
+
+    monkeypatch.setattr(bitpanda, "connect", connect)
+    evidence = asyncio.run(bitpanda.inspect_market(None, ISIN, IDENTIFIER))
+    assert calls == [
+        ("list_assets", {"id": IDENTIFIER, "page_size": 1}),
+        ("get_ticker", {"asset_id": IDENTIFIER}),
+    ]
+    assert evidence["ticker_response"] == {"synthetic_ticker_field": "123"}
+    assert evidence["data_mapping"] == "unverified_not_accepted_by_engine"
+    assert evidence["purpose"] == "public_market_contract_review_only"
+    assert (
+        digest({k: v for k, v in evidence.items() if k != "evidence_id"}) == evidence["evidence_id"]
+    )
+
+
+def test_failed_identity_lookup_never_requests_a_ticker(monkeypatch, catalog_payload):
+    catalog_payload["data"][0]["type"] = "security"
+
+    class Client:
+        async def call(self, name, arguments):
+            assert name == "list_assets"
+            return catalog_payload
+
+    @asynccontextmanager
+    async def connect(_):
+        yield Client()
+
+    monkeypatch.setattr(bitpanda, "connect", connect)
+    with pytest.raises(SafetyError, match="expected_real_etf_not_found"):
+        asyncio.run(bitpanda.inspect_market(None, ISIN))
+
+
 def test_invalid_identifier_is_rejected_before_connection(monkeypatch):
     def forbidden(_):
         pytest.fail("Invalid input must not open a broker connection")
@@ -185,3 +232,32 @@ def test_invalid_lookup_never_requests_a_secret(monkeypatch, tmp_path, capsys):
     )
     assert cli.main(["broker-asset", "--isin", "bad", "--out", str(tmp_path / "out.json")]) == 2
     assert json.loads(capsys.readouterr().out)["code"] == "invalid_isin"
+
+
+def test_market_capture_cli_prints_receipt_without_raw_response(monkeypatch, tmp_path, capsys):
+    from etf_autopilot import cli
+
+    marker = "fixture-raw-response-not-for-stdout"
+    evidence = {
+        "ticker_response": {"fixture": marker},
+        "evidence_id": "fixture-evidence-id",
+        "data_mapping": "unverified_not_accepted_by_engine",
+    }
+
+    async def inspect(credentials, isin, identifier):
+        assert credentials.api_key == "fixture-key-never-print"
+        assert isin == ISIN and identifier == IDENTIFIER
+        return evidence
+
+    monkeypatch.setenv("BITPANDA_API_KEY", "fixture-key-never-print")
+    monkeypatch.setenv("BITPANDA_KEY_EXPIRES_AT", "2099-01-01T00:00:00Z")
+    monkeypatch.setattr(bitpanda, "inspect_market", inspect)
+    output = tmp_path / "market.json"
+    assert (
+        cli.main(["broker-market", "--isin", ISIN, "--asset-id", IDENTIFIER, "--out", str(output)])
+        == 0
+    )
+    printed = capsys.readouterr().out
+    assert marker not in printed and "fixture-key-never-print" not in printed
+    assert json.loads(printed)["status"] == "market_contract_saved"
+    assert json.loads(output.read_text()) == evidence

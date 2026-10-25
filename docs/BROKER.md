@@ -67,6 +67,42 @@ initial ISIN lookup; multiple matches are rejected. Use a new output filename fo
 a new observation. Catalog active flags do not establish account permission or
 price availability. Identity snapshots never add funds to the strategy automatically.
 
+## Capture the ticker contract
+
+After the read-only account setup, `broker-market` can capture one catalog lookup
+and one `get_ticker` read for private response-mapping review:
+
+```sh
+etf-autopilot broker-market --isin YOUR_ISIN --asset-id REVIEWED_UUID \
+  --expires-at YOUR_ACTUAL_UTC_EXPIRY_TIMESTAMP --out var/market-contract.json
+```
+
+It uses the same existing key and hidden prompt. It reads no holdings or account
+history, creates no quote and stores no key. The raw public market response stays
+in the ignored output file; stdout contains only a receipt. The lookup's verified
+UUID binds the ticker request. A new observation needs a new filename.
+
+The response is explicitly **unmapped** and cannot feed the financial engine.
+Review its currency, timestamp, price definition and stale/closed-market behavior
+before implementing a typed forward adapter. Do not invent absent fields or treat
+a current ticker as historical total-return data. This capture neither selects an
+ETF nor verifies that the account is permitted to trade it.
+
+The observed ticker contract contains `data.asset_id`, `data.currency_id` and a
+decimal-string `data.price`, with no price timestamp or bid/ask. Check a capture
+offline, without the SDK or credentials:
+
+```sh
+etf-autopilot market-verify var/market-contract.json
+```
+
+The receipt validates the content hash, real-ETF type, requested asset binding and
+price representation. It records retrieval as `observed_at`, while `price_as_of`
+remains null and `price_age` remains unknown. Currency UUID-to-symbol mapping and
+spread remain unverified. It does not label a just-fetched value as a fresh quote,
+or pass the snapshot to the paper engine. Additional response fields require
+contract review rather than guessed mapping. Public fixture values are fictional.
+
 ## Boundaries
 
 The allowlist contains asset/currency discovery, ticker, holdings, portfolio

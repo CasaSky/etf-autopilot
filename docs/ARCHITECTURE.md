@@ -113,8 +113,10 @@ never tool arguments or prompts; errors use fixed codes without upstream bodies.
 
 Fixture contracts are explicitly synthetic protocol envelopes. A successful MCP
 protocol check does not prove instrument eligibility or live domain mappings.
-Read-only protocol access and ETF catalog identity have been checked. Portfolio
-domain mapping and ticker responses still require independent contract validation.
+Read-only protocol access, ETF catalog identity and ticker response fields have
+been checked. The observed ticker has no price timestamp or bid/ask. Its typed
+receipt records unknown price age and is ineligible for execution. A timestamped
+forward feed, currency-symbol binding and portfolio domain mapping remain pending.
 No guessed REST response fields are used as a live adapter.
 The new Public MCP is the only broker route; Fusion, Earn and crypto transfers are
 outside scope. There is no duplicate REST execution implementation.

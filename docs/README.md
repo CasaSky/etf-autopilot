@@ -26,6 +26,7 @@ The core source is intentionally small and direct:
 - `selection.py` / `cycle.py`: bounded choices and a finite recurring entry point.
 - `history.py` / `evaluation.py`: imported data, fixed protocols and exposure tracking.
 - `instruments.py` / `providers.py`: broker identity checks and offline daily-export conversion.
+- `market.py`: typed ticker evidence that distinguishes retrieval time from price time.
 - `operations.py` / `bitpanda.py`: optional diagnosis and read-only broker boundaries.
 
 Read the example first, then follow a single event into the relevant module. Most

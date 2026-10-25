@@ -109,3 +109,15 @@ def test_baseline_event_completed_during_call_cannot_be_reallocated(store, confi
     assert "allocation_id" not in state["events"][events[0]["id"]]
     with pytest.raises(SafetyError, match="event_id_payload_conflict"):
         run_event(store, config, events[0], allocation_id=receipt["id"])
+
+
+def test_changed_inference_instructions_cannot_reuse_an_old_prepared_choice(
+    store, config, events, monkeypatch
+):
+    from etf_autopilot import selection
+
+    receipt = select_strategy(store, config, events[0])
+    monkeypatch.setattr(selection, "SYSTEM", selection.SYSTEM + " changed instructions")
+    result = run_event(store, config, events[0], allocation_id=receipt["id"])
+    assert result["status"] == "halted" and result["orders"] == 0
+    assert result["diagnosis"] == "allocation_context_hash_mismatch"
