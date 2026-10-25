@@ -123,6 +123,14 @@ their own policies. Halting does not mean liquidation or freezing portfolio valu
 Fees, estimated spread, turnover, cash, book cost, unsold units, realized P&L,
 net equity, sampled drawdown and decision records are retained in the result.
 
+Execution sizing is also part of the frozen config. The original `reject` default
+halts an oversized plan; optional `bounded` sizing can leave cash or exposure away
+from targets while respecting the same daily and turnover caps. Results record the
+policy, constrained-decision counts and individual order-sizing reasons. A limit
+halt can dominate a return comparison, so inspect the decision trace before
+attributing a difference to a fund or strategy. A policy change after observing
+results requires a new protocol and remains part of the experiment history.
+
 ## Registration and holdout exposure
 
 Register the complete protocol before running results. Validation requires completed

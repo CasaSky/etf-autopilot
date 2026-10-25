@@ -1,9 +1,9 @@
 """Two fixed hypotheses. No fitting, model-selected assets or strategy promotion."""
 
 from copy import deepcopy
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
-from .domain import ZERO, SafetyError, instant, money, number, units
+from .domain import CENT, ZERO, SafetyError, instant, money, number, units
 from .paper import apply_fill, equity
 
 
@@ -58,6 +58,11 @@ def allocation(market, config, strategy):
 
 
 def plan(account, market, weights, config, day):
+    """Compatibility interface returning only the fully checked feasible orders."""
+    return plan_with_limits(account, market, weights, config, day)["orders"]
+
+
+def plan_with_limits(account, market, weights, config, day):
     """Sells first; cash reserve and total fees constrain buys; floor fractional units."""
     portfolio = deepcopy(account["portfolio"])
     prices, risk, execution = market["prices"], config["risk"], config["execution"]
@@ -100,12 +105,14 @@ def plan(account, market, weights, config, day):
                 candidates = [order for order in candidates if order["asset"] != asset]
                 candidates.append({"asset": asset, "side": "sell", "quantity": str(quantity)})
                 break
-    orders = []
+    orders, constraints = [], []
     gross_volume = ZERO
     daily = deepcopy(account["daily_volume"].get(day, {"buy": "0", "sell": "0"}))
     for order in sorted(candidates, key=lambda o: (o["side"] != "sell", o["asset"])):
         side, asset = order["side"], order["asset"]
         price = number(prices[asset]) * (1 + half_spread if side == "buy" else 1 - half_spread)
+        if price <= ZERO:
+            raise SafetyError("nonpositive_execution_price")
         quantity = number(order["quantity"])
         if side == "buy":
             available = max(ZERO, number(portfolio["cash"]) - reserve - fee)
@@ -113,8 +120,36 @@ def plan(account, market, weights, config, day):
             # Rounding to cents must never overspend the cash reserve.
             while quantity > ZERO and money(quantity * price) + fee > available + fee:
                 quantity -= Decimal("0.000001")
+        note = None
+        if execution.get("sizing_policy", "reject") == "bounded":
+            remaining = {
+                "daily_volume": max(
+                    ZERO, number(risk[f"max_daily_{side}_eur"]) - number(daily[side])
+                ),
+                "turnover": max(ZERO, capital * number(risk["max_turnover_weight"]) - gross_volume),
+            }
+            # A cent-denominated cap cannot round a fill above a fractional-cent limit.
+            budget = min(remaining.values()).quantize(CENT, rounding=ROUND_DOWN)
+            bounded = min(quantity, units(budget / price))
+            if bounded < quantity:
+                requested = money(quantity * price)
+                note = {
+                    "asset": asset,
+                    "side": side,
+                    "reasons": [name for name, value in remaining.items() if requested > value],
+                    "requested_quantity": str(quantity),
+                    "planned_quantity": str(bounded),
+                    "remaining_notional_budget_eur": str(budget),
+                    "status": "resized",
+                }
+                if not note["reasons"]:
+                    note["reasons"] = ["notional_rounding"]
+                constraints.append(note)
+            quantity = bounded
         notional = money(quantity * price)
         if quantity <= ZERO or notional < number(risk["min_order_eur"]):
+            if note is not None:
+                note.update(planned_quantity="0", status="skipped_below_minimum_order")
             continue
         gross_volume += notional
         if gross_volume > capital * number(risk["max_turnover_weight"]):
@@ -141,4 +176,4 @@ def plan(account, market, weights, config, day):
             equity_exposure += value
     if equity_exposure > final_equity * number(risk["max_equity_weight"]):
         raise SafetyError("projected_equity_limit_exceeded")
-    return orders
+    return {"orders": orders, "constraints": constraints}

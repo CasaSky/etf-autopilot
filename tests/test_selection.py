@@ -88,6 +88,7 @@ def test_valid_model_choice_affects_only_strategy_and_preserves_comparators(stor
         "not json",
         '{"strategy":"accept_quote"}',
         '{"strategy":"passive","max_drawdown":"0.99"}',
+        '{"strategy":"passive","sizing_policy":"bounded"}',
         '{"strategy":["passive"]}',
         '{"strategy":"passive","strategy":"slow_trend"}',
         "x" * 401,

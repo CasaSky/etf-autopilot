@@ -14,7 +14,7 @@ from pathlib import Path
 from .domain import ZERO, SafetyError, canonical, digest, instant, money, number, validate_config
 from .history import config_for_dataset, period_number, validate_dataset
 from .paper import accept_paper_quote, equity, make_quote, new_account, reconcile, record_fill
-from .strategy import allocation, plan
+from .strategy import allocation, plan_with_limits
 
 WINDOWS = ("development", "validation", "holdout")
 MAX_RESULT_BYTES = 5_000_000
@@ -141,7 +141,10 @@ def _simulate_account(dataset, config, protocol, window_name, role):
                     ],
                 }
                 entry["targets"] = allocation(market, config, strategy)
-                orders = plan(account, market, entry["targets"], config, day)
+                planned = plan_with_limits(account, market, entry["targets"], config, day)
+                orders = planned["orders"]
+                if planned["constraints"]:
+                    entry["execution_constraints"] = planned["constraints"]
                 for order_index, order in enumerate(orders):
                     intent_id = digest(
                         {
@@ -221,6 +224,7 @@ def _simulate_account(dataset, config, protocol, window_name, role):
         "positions": positions,
         "halt": halt,
         "reconciliation": reconcile(account, capital)["status"],
+        "constrained_decisions": sum(bool(row.get("execution_constraints")) for row in decisions),
     }
     return {"summary": snapshot, "decisions": decisions, "account": account}
 
@@ -245,6 +249,7 @@ def evaluate_window(dataset, base_config, protocol, window_name):
         "window": window_name,
         "origin": dataset["manifest"]["origin"],
         "price_basis": dataset["manifest"]["price_basis"],
+        "execution_sizing_policy": config["execution"].get("sizing_policy", "reject"),
         "valuation_start": strategy["first_valuation_at"],
         "valuation_end": strategy["last_valuation_at"],
         "model_calls": 0,
@@ -443,6 +448,17 @@ def evaluation_markdown(result):
             f"{number(s['max_drawdown_percent']):.2f}% | {s['fees_eur']} | "
             f"{s['spread_eur']} | {s['operations_eur']} | {s['orders']} | {s['halt'] or 'none'} |"
         )
+    if result.get("execution_sizing_policy", "reject") == "bounded":
+        lines += [
+            "",
+            "Execution sizing: bounded within unchanged daily and turnover caps. "
+            "Target weights can remain unmet. Constrained decisions: "
+            + ", ".join(
+                f"{name}={result['accounts'][name]['summary']['constrained_decisions']}"
+                for name in ("strategy", "passive", "without_ai")
+            )
+            + ".",
+        ]
     lines += [
         "",
         f"Strategy minus passive: EUR {result['strategy_minus_passive_eur']}. "

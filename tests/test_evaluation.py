@@ -69,6 +69,30 @@ def test_evaluation_retains_aligned_dates_capital_and_independent_comparators(
     assert "SYNTHETIC CONTRACT CHECK" in evaluation_markdown(result)
 
 
+def test_bounded_sizing_is_frozen_and_constraints_are_retained(dataset, config, windows):
+    config["risk"]["max_daily_buy_eur"] = "2000"
+    strict = protocol_template(dataset, config, windows)
+    rejected = evaluate_window(dataset, config, strict, "development")
+    assert rejected["execution_sizing_policy"] == "reject"
+    assert rejected["accounts"]["passive"]["summary"]["halt"] == "daily_volume_limit_exceeded"
+    config["execution"]["sizing_policy"] = "bounded"
+    with pytest.raises(SafetyError, match="evaluation_dataset_or_config_changed"):
+        evaluate_window(dataset, config, strict, "development")
+    protocol = protocol_template(dataset, config, windows)
+    result = evaluate_window(dataset, config, protocol, "development")
+    assert result["execution_sizing_policy"] == "bounded"
+    first = result["accounts"]["passive"]["decisions"][0]
+    assert first["execution_constraints"]
+    account = result["accounts"]["passive"]["account"]
+    assert (
+        sum(number(fill["notional"]) for fill in account["ledger"] if fill["id"] in first["fills"])
+        <= 2000
+    )
+    assert result["accounts"]["passive"]["summary"]["constrained_decisions"] > 0
+    assert result["accounts"]["passive"]["summary"]["reconciliation"] == "matched"
+    assert "Execution sizing: bounded" in evaluation_markdown(result)
+
+
 @pytest.mark.parametrize(
     "case,expected",
     [

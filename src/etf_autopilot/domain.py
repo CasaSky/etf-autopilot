@@ -158,8 +158,12 @@ def validate_config(config: dict) -> None:
     if equity_weight > number(risk["max_equity_weight"]):
         raise SafetyError("equity_weight_exceeded")
     execution = config["execution"]
-    if set(execution) != {"fee_eur", "spread_bps", "quote_ttl_seconds"}:
+    execution_fields = {"fee_eur", "spread_bps", "quote_ttl_seconds"}
+    if set(execution) not in (execution_fields, execution_fields | {"sizing_policy"}):
         raise SafetyError("unsupported_execution_config")
+    sizing = execution.get("sizing_policy", "reject")
+    if not isinstance(sizing, str) or sizing not in {"reject", "bounded"}:
+        raise SafetyError("unsupported_sizing_policy")
     if number(execution["fee_eur"]) < ZERO or number(execution["spread_bps"]) < ZERO:
         raise SafetyError("negative_cost")
     if number(execution["spread_bps"]) > number(risk["max_spread_bps"]):

@@ -12,6 +12,29 @@ with the same event ID after a process interruption. Back up the SQLite database
 while the finite worker is stopped. A new evaluation uses a new state filename.
 A changed config cannot silently operate on an existing account.
 
+## Order sizing within fixed limits
+
+The default `execution.sizing_policy` is `reject` when omitted. A proposed plan
+that exceeds a daily buy/sell or total turnover cap halts before placing orders.
+The original paper configuration keeps this behavior.
+
+A separate experiment can set `"sizing_policy": "bounded"` in `execution`.
+The planner reduces each order to the remaining daily allowance and turnover
+budget, floors quantities, includes fees in cash checks, and skips orders below
+the minimum size. Sells come first, then asset ID order within each side; this is
+deterministic priority, not an optimal allocation solver. Residual cash and unmet
+target weights can remain. No remainder is automatically retried that month.
+
+The complete reduced plan must still pass cash, position and equity limits before
+its first order. If reducing a sale leaves an unsafe portfolio, it still halts.
+Daily and turnover caps are never increased. This is planned order sizing;
+unexpected broker partial fills retain their separate reconciliation procedure.
+Event results record `execution_constraints`, and reports count constrained events.
+
+Use a new state file and a newly registered historical protocol when changing this
+policy. Preserve the old results and record when the change was motivated by an
+observed limit interaction. An execution change is not evidence of investment alpha.
+
 ## Halts
 
 - `broker_outcome_unknown`: do not submit again. Run `reconcile`; it imports a

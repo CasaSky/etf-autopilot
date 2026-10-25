@@ -15,6 +15,9 @@ def summary(state):
         if event.get("allocation_id") and event["result"]["status"] == "completed"
     }
     choices = [row for row in allocations if row["id"] in used and row["source"] != "deterministic"]
+    constrained = sum(
+        bool(event["result"].get("execution_constraints")) for event in state["events"].values()
+    )
     if state["last_market"] is None:
         return {
             "mode": "paper",
@@ -23,6 +26,7 @@ def summary(state):
             "diagnosis": deterministic_diagnosis(state["halt"]),
             "accounts": {},
             "pending_allocations": pending,
+            "constrained_events": constrained,
         }
     prices = state["last_market"]["prices"]
     capital = number(state["config"]["starting_cash"])
@@ -90,6 +94,7 @@ def summary(state):
         "diagnosis": deterministic_diagnosis(effective_halt),
         "accounts": accounts,
         "pending_allocations": pending,
+        "constrained_events": constrained,
         "allocation_choices": [
             {key: row[key] for key in ("event_id", "source", "strategy", "reserved_cost_eur")}
             for row in choices
@@ -174,6 +179,11 @@ def markdown(state):
         "## Limits",
         "",
     ]
+    if report["constrained_events"]:
+        lines.append(
+            f"Constrained events: {report['constrained_events']}. Inspect recorded sizing "
+            "constraints and unmet targets; all orders remain subject to the configured caps."
+        )
     for choice in report["allocation_choices"]:
         lines.append(
             f"Allocation {choice['event_id']}: {choice['strategy']} from {choice['source']}; "

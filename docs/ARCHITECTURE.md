@@ -53,6 +53,13 @@ cash floor, a minimum-size sale restores it. Drawdown beyond the configured limi
 halts for review; it does not automatically liquidate. Drift can still exist between
 monthly decisions and marks; the system does not provide continuous risk protection.
 
+The default sizing policy rejects plans above daily or turnover limits. An opt-in
+`bounded` policy sizes orders to the remaining caps without changing strategy
+weights or hard limits. It may leave targets unmet, records constraints and still
+checks the entire projected portfolio before execution. See the
+[operating guide](OPERATIONS.md#order-sizing-within-fixed-limits) for priority and
+remainder handling. Changing sizing requires a separate configuration and state.
+
 ## Persistence and external outcomes
 
 A paper event commits all state atomically. Locally, SQLite `BEGIN IMMEDIATE`

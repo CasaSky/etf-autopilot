@@ -12,7 +12,7 @@ from .paper import (
     reconcile,
     record_fill,
 )
-from .strategy import allocation, plan, validate_market
+from .strategy import allocation, plan_with_limits, validate_market
 
 ACCOUNTS = ("strategy", "passive", "without_ai")
 
@@ -149,7 +149,12 @@ def run_event(store, config, event, *, fault=None, allocation_id=None):
                         else (chosen if name == "strategy" else config["strategy"])
                     )
                     targets = allocation(event["market"], config, strategy)
-                    plans[name] = plan(account, event["market"], targets, config, day)
+                    planned = plan_with_limits(account, event["market"], targets, config, day)
+                    plans[name] = planned["orders"]
+                    if planned["constraints"]:
+                        result.setdefault("execution_constraints", {})[name] = planned[
+                            "constraints"
+                        ]
                 # Reserve the month before any submission, including uncertain/partial outcomes.
                 state["slots"][month] = event["id"]
                 state["last_at"] = event["at"]
