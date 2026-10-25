@@ -10,8 +10,8 @@ The original demo proves that orders, accounting and recovery fit together. The
 new importer/evaluator can replay supplied historical total-return data under a
 fixed, auditable protocol. It does not supply or independently verify a data feed.
 The included 48-period CSV is explicitly synthetic and is a software contract
-fixture, not historical market evidence. No genuine historical performance result
-has been produced by this delivery.
+fixture, not historical market evidence. The public examples include no genuine
+historical performance result; supplied real datasets are evaluated privately.
 
 The [daily export adapter](PROVIDER_IMPORT.md) now supports operator-supplied EODHD
 files offline. Real source access/licensing, point-in-time availability, the exact

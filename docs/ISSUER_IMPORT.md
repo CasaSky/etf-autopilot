@@ -46,6 +46,14 @@ Use the example's `spec.json` shape with:
 - `origin: declared_historical` and the reviewed private-use declaration for real
   data. Fictional examples keep their synthetic origin and usage labels.
 
+Some exports contain only fund-level metadata. For these, add
+`reviewed_share_class_launch_date: YYYY-MM-DD` to the binding after checking an
+issuer document for that exact ISIN. The adapter requires matching NAV-header and
+base currencies, rejects conflicts with any published class date/currency, and
+records this explicit metadata basis/date in provenance. It never assumes a fund
+launch establishes share-class inception. Existing class-level exports need no
+additional declaration.
+
 ```sh
 etf-autopilot history-issuer var/issuer/spec.json \
   var/issuer/equity.xls var/issuer/bond.xls var/issuer/ecb.xml \

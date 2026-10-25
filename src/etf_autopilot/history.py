@@ -9,7 +9,7 @@ import hashlib
 import io
 import re
 from copy import deepcopy
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -213,18 +213,33 @@ def validate_issuer_provenance(manifest):
     ):
         raise SafetyError("unsupported_issuer_fx_provenance")
     sources = provenance["sources"]
+    fields = {
+        "native_currency",
+        "fund_name",
+        "raw_sha256",
+        "binding_sha256",
+        "binding_evidence_url",
+        "undated_benchmark_rows",
+        "prelaunch_seed_rows",
+        "excluded_nonjoint_dates",
+    }
+    reviewed_fields = {"metadata_basis", "reviewed_share_class_launch_date"}
     for source in sources.values():
-        if not isinstance(source, dict) or set(source) != {
-            "native_currency",
-            "fund_name",
-            "raw_sha256",
-            "binding_sha256",
-            "binding_evidence_url",
-            "undated_benchmark_rows",
-            "prelaunch_seed_rows",
-            "excluded_nonjoint_dates",
-        }:
+        if not isinstance(source, dict) or set(source) not in (fields, fields | reviewed_fields):
             raise SafetyError("unsupported_issuer_source")
+        if "metadata_basis" in source:
+            if source["metadata_basis"] != "reviewed_class_launch_and_matching_nav_base_currency":
+                raise SafetyError("unsupported_issuer_metadata_basis")
+            value = source["reviewed_share_class_launch_date"]
+            try:
+                if not isinstance(value, str) or not re.fullmatch(
+                    r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value
+                ):
+                    raise ValueError
+                stamp = date.fromisoformat(value)
+                period_number(stamp.strftime("%Y-%m"))
+            except ValueError:
+                raise SafetyError("invalid_reviewed_class_launch_date") from None
         if (
             not isinstance(source["native_currency"], str)
             or source["native_currency"] not in {"EUR", "USD"}

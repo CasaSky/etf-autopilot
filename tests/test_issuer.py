@@ -188,6 +188,73 @@ def test_prelaunch_seed_is_counted_but_economic_history_is_not_invented(exports)
     assert parsed["prelaunch_seed_rows"] == 1 and date(2021, 12, 31) not in parsed["values"]
 
 
+def fund_level_metadata(root):
+    for page in root.findall(SS + "Worksheet"):
+        table = page.find(SS + "Table")
+        if page.get(SS + "Name") == "Fund Header":
+            for text in ("", "NAV as of 07/Jan/2026", "EUR 123.45"):
+                row = ET.SubElement(table, SS + "Row")
+                cell = ET.SubElement(row, SS + "Cell")
+                ET.SubElement(cell, SS + "Data").text = text
+        if page.get(SS + "Name") == "Key Facts":
+            for row in table:
+                label = row[0].find(SS + "Data")
+                if label.text == "Share Class Currency":
+                    label.text = "Base Currency"
+                elif label.text == "Share Class Launch Date":
+                    label.text = "Fund Launch Date"
+
+
+def test_fund_level_export_needs_explicit_class_review_and_retains_its_basis(exports):
+    before = convert(exports)
+    xml_change(exports / "bond.xls", fund_level_metadata)
+    with pytest.raises(SafetyError, match="share_class_launch_review_required"):
+        read_issuer(exports / "bond.xls")
+    spec = load_json(exports / "spec.json")
+    spec["bindings"]["RESEARCH_BOND"]["reviewed_share_class_launch_date"] = "2022-01-03"
+    (exports / "spec.json").write_text(json.dumps(spec))
+    after = convert(exports, exports / "reviewed-class")
+    source = after["manifest"]["provenance"]["sources"]["RESEARCH_BOND"]
+    assert source["metadata_basis"] == "reviewed_class_launch_and_matching_nav_base_currency"
+    assert source["reviewed_share_class_launch_date"] == "2022-01-03"
+    assert before["rows"] == after["rows"]
+    validate_dataset(after)
+
+
+def test_review_cannot_override_published_class_inception_or_predate_the_fund(exports):
+    with pytest.raises(SafetyError, match="reviewed_class_launch_mismatch"):
+        read_issuer(exports / "bond.xls", reviewed_share_class_launch_date="2022-01-04")
+    xml_change(exports / "bond.xls", fund_level_metadata)
+    with pytest.raises(SafetyError, match="reviewed_class_launch_precedes_fund"):
+        read_issuer(exports / "bond.xls", reviewed_share_class_launch_date="2021-12-31")
+
+
+def test_fund_base_currency_alone_cannot_relabel_a_different_nav_currency(exports):
+    def conflict(root):
+        fund_level_metadata(root)
+        page = root.find(SS + "Worksheet")
+        page.find(SS + "Table")[3][0].find(SS + "Data").text = "USD 123.45"
+
+    xml_change(exports / "bond.xls", conflict)
+    with pytest.raises(SafetyError, match="fund_level_nav_currency_binding_required"):
+        read_issuer(exports / "bond.xls", reviewed_share_class_launch_date="2022-01-03")
+
+
+def test_normalized_manifest_cannot_hide_an_inferred_class_date(exports):
+    xml_change(exports / "bond.xls", fund_level_metadata)
+    spec = load_json(exports / "spec.json")
+    spec["bindings"]["RESEARCH_BOND"]["reviewed_share_class_launch_date"] = "2022-01-03"
+    (exports / "spec.json").write_text(json.dumps(spec))
+    dataset = convert(exports, exports / "class-proof")
+    dataset["manifest"]["provenance"]["sources"]["RESEARCH_BOND"]["metadata_basis"] = "inferred"
+    dataset["manifest_hash"] = digest(dataset["manifest"])
+    dataset["dataset_id"] = digest(
+        {key: value for key, value in dataset.items() if key != "dataset_id"}
+    )
+    with pytest.raises(SafetyError, match="unsupported_issuer_metadata_basis"):
+        validate_dataset(dataset)
+
+
 @pytest.mark.parametrize("raw", [b'<!DOCTYPE x [<!ENTITY y "boom">]><x/>', "<x/>".encode("utf-16")])
 def test_entity_and_non_utf8_documents_do_not_expand_or_trigger_fetches(tmp_path, raw):
     path = tmp_path / "unsafe.xml"

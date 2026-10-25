@@ -79,7 +79,7 @@ def _cells(row):
     return result
 
 
-def read_issuer(path):
+def read_issuer(path, *, reviewed_share_class_launch_date=None):
     """Parse the ordered financial prefix; never parse/repair later holdings XML.
 
     Hash the entire original file. Some published exports have malformed unrelated
@@ -130,14 +130,48 @@ def read_issuer(path):
         if len(row) < 2 or row[0] in facts:
             raise SafetyError("invalid_or_duplicate_issuer_fact")
         facts[row[0]] = row[1]
-    required = {"ISIN", "Share Class Currency", "Asset Class", "UCITS", "Share Class Launch Date"}
-    if (
-        not required <= set(facts)
-        or facts["UCITS"] != "Yes"
-        or facts["Share Class Currency"] not in {"USD", "EUR"}
-    ):
+    required = {"ISIN", "Asset Class", "UCITS"}
+    if not required <= set(facts) or facts["UCITS"] != "Yes":
         raise SafetyError("unsupported_issuer_fund_metadata")
-    launch = _day(facts["Share Class Launch Date"])
+    reviewed_launch = None
+    if reviewed_share_class_launch_date is not None:
+        try:
+            if not isinstance(reviewed_share_class_launch_date, str) or not re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}", reviewed_share_class_launch_date
+            ):
+                raise ValueError
+            reviewed_launch = date.fromisoformat(reviewed_share_class_launch_date)
+        except ValueError:
+            raise SafetyError("invalid_reviewed_class_launch_date") from None
+        period_number(reviewed_launch.strftime("%Y-%m"))
+    class_launch = (
+        _day(facts["Share Class Launch Date"]) if "Share Class Launch Date" in facts else None
+    )
+    if reviewed_launch is not None and class_launch is not None and reviewed_launch != class_launch:
+        raise SafetyError("reviewed_class_launch_mismatch")
+    metadata = {}
+    if class_launch is not None and "Share Class Currency" in facts:
+        launch, currency = class_launch, facts["Share Class Currency"]
+    else:
+        if reviewed_launch is None:
+            raise SafetyError("share_class_launch_review_required")
+        nav_row = sheets["Fund Header"][3] if len(sheets["Fund Header"]) > 3 else []
+        nav = re.fullmatch(r"(EUR|USD) [0-9,]+(?:\.[0-9]+)?", nav_row[0]) if nav_row else None
+        if (
+            nav is None
+            or facts.get("Base Currency") != nav[1]
+            or ("Share Class Currency" in facts and facts["Share Class Currency"] != nav[1])
+        ):
+            raise SafetyError("fund_level_nav_currency_binding_required")
+        if "Fund Launch Date" not in facts or reviewed_launch < _day(facts["Fund Launch Date"]):
+            raise SafetyError("reviewed_class_launch_precedes_fund")
+        launch, currency = reviewed_launch, nav[1]
+        metadata = {
+            "metadata_basis": "reviewed_class_launch_and_matching_nav_base_currency",
+            "reviewed_share_class_launch_date": launch.isoformat(),
+        }
+    if currency not in {"USD", "EUR"}:
+        raise SafetyError("unsupported_issuer_fund_metadata")
     values, seen = {}, set()
     undated, seeds = 0, 0
     for row in growth[1:]:
@@ -173,12 +207,13 @@ def read_issuer(path):
     return {
         "fund_name": header[0],
         "isin": facts["ISIN"],
-        "native_currency": facts["Share Class Currency"],
+        "native_currency": currency,
         "asset_class": facts["Asset Class"],
         "raw_sha256": raw_hash,
         "values": values,
         "undated_benchmark_rows": undated,
         "prelaunch_seed_rows": seeds,
+        **metadata,
     }
 
 
@@ -257,14 +292,16 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
     paths = {"equity": equity_path, "bond": bond_path}
     for role, asset in roles.items():
         binding = bindings[asset]
-        if not isinstance(binding, dict) or set(binding) != {
-            "isin",
-            "fund_name",
-            "native_currency",
-            "evidence_url",
-        }:
+        fields = {"isin", "fund_name", "native_currency", "evidence_url"}
+        if not isinstance(binding, dict) or set(binding) not in (
+            fields,
+            fields | {"reviewed_share_class_launch_date"},
+        ):
             raise SafetyError("unsupported_issuer_binding")
-        data = read_issuer(paths[role])
+        data = read_issuer(
+            paths[role],
+            reviewed_share_class_launch_date=binding.get("reviewed_share_class_launch_date"),
+        )
         if any(binding[key] != data[key] for key in ("isin", "fund_name", "native_currency")) or (
             data["isin"] != instruments[asset].get("isin")
             or data["asset_class"] != {"equity": "Equity", "bond": "Fixed Income"}[role]
@@ -289,6 +326,10 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
         sources[asset].update(
             binding_sha256=digest(binding), binding_evidence_url=binding["evidence_url"]
         )
+        if "metadata_basis" in data:
+            sources[asset].update(
+                {key: data[key] for key in ("metadata_basis", "reviewed_share_class_launch_date")}
+            )
     joint = set.intersection(*calendars, set(fx))
     if not joint:
         raise SafetyError("no_joint_issuer_and_fx_observations")
