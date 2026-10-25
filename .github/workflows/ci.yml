@@ -19,15 +19,22 @@ jobs:
           python-version: '3.13'
           cache: pip
           cache-dependency-path: requirements.lock
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.16.1'
+          terraform_wrapper: false
       - run: python scripts/check_private_files.py --history
       - run: python -m pip install -r requirements.lock
       - run: python -m pip install --no-deps --no-build-isolation -e .
       - run: python -S examples/paper_demo.py --output-dir var/ci-quickstart
       - run: ruff check . && ruff format --check .
       - run: pytest -q
-      - run: cfn-lint deploy/template.yaml
       - run: etf-autopilot demo
       - run: python scripts/package_lambda.py
+      - run: terraform fmt -check -recursive deploy
+      - run: terraform -chdir=deploy init -backend=false -input=false -lockfile=readonly
+      - run: terraform -chdir=deploy validate
+      - run: terraform -chdir=deploy test
       - run: python -m build --no-isolation
       - uses: actions/upload-artifact@v7
         with:

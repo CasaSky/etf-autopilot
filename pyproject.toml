@@ -16,7 +16,7 @@ keywords = ["etf", "paper-trading", "ai-agents", "mcp", "portfolio", "backtestin
 [project.optional-dependencies]
 broker = ["mcp>=1.26,<2", "jsonschema>=4.26,<5"]
 aws = ["boto3>=1.40,<2"]
-dev = ["pytest>=9,<10", "ruff>=0.14,<1", "pyyaml>=6,<7", "build>=1,<2", "cfn-lint>=1.40,<2"]
+dev = ["pytest>=9,<10", "ruff>=0.14,<1", "pyyaml>=6,<7", "build>=1,<2"]
 
 [project.scripts]
 etf-autopilot = "etf_autopilot.cli:main"

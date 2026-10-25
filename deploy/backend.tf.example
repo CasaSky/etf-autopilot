@@ -1,0 +1,4 @@
+# Copy to backend.tf when selecting an existing private Terraform state bucket.
+terraform {
+  backend "s3" {}
+}

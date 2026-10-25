@@ -1,17 +1,19 @@
-# AWS paper deployment — review before provisioning
+# AWS paper deployment with Terraform
 
 **Prepared and statically validated; not deployed.** The required next choices are
 AWS profile/account, region, monthly budget and alert route. No broker credentials,
-permanent broker budget, model permissions or money are configured by this template.
-Use only this repository and a separately named `etf-autopilot-paper` stack.
+permanent broker budget, model permissions or money are configured by this module.
+Use only this repository's `deploy/` root and its `etf-autopilot-paper` resources.
+Terraform replaces the earlier SAM template; there is one infrastructure definition.
 
 ## Resources and limits
 
-AWS SAM/CloudFormation creates one Python 3.13 Lambda, a private AES256-encrypted,
+Terraform creates one Python 3.13 Lambda, a private AES256-encrypted,
 versioned S3 bucket, an SQS failure queue, seven-day CloudWatch logs, scoped IAM
 roles and a **disabled** daily EventBridge Scheduler health check. The worker has
 256 MB, a 30-second timeout and reserved concurrency one. Async Lambda and
-Scheduler automatic retries are zero. S3 SDK attempts are explicitly one.
+Scheduler automatic retries are zero. S3 SDK attempts are explicitly one. The
+Scheduler role is restricted to this account and its dedicated schedule group.
 
 The worker can read its fixed input/state keys, conditionally write its one state
 object, list its own bucket (so missing keys produce a detectable 404), write its
@@ -67,9 +69,19 @@ Sources: [Lambda pricing](https://aws.amazon.com/lambda/pricing/),
 ```sh
 .venv/bin/pytest -q
 .venv/bin/ruff check .
-.venv/bin/cfn-lint deploy/template.yaml
 .venv/bin/python scripts/package_lambda.py
+terraform fmt -check -recursive deploy
+terraform -chdir=deploy init -backend=false -input=false -lockfile=readonly
+terraform -chdir=deploy validate
+terraform -chdir=deploy test
 ```
+
+Tested with Terraform 1.16.1; the module requires 1.16 or later in the 1.x line.
+The committed provider lock file pins AWS provider 6.70.0. Native Terraform tests
+use a **mocked AWS provider and plan operations only**. They do not use credentials,
+call AWS or create resources. They check paper mode, private/CAS-protected state,
+IAM scope, scheduler trust, retry limits, opt-in scheduling and stopping the worker.
+Provider downloads require internet access. There is no deployment step in CI.
 
 Packaging uses an allowlist of application Python sources and the paper config;
 it never zips the repository root, `.env`, local state, `.venv` or `.aws`.
@@ -79,29 +91,77 @@ No native macOS wheel is shipped. A managed-runtime smoke test is required after
 reviewed provisioning; if SDK behavior changes, pin/bundle only that SDK in a new
 reviewed package. The MCP/Bedrock connectors are not invoked by this deployment.
 
-AWS SAM CLI is a separate prerequisite, not installed or invoked by this delivery.
-Review the packaged CloudFormation change set before execution. The following
-commands are for the user-authorized deployment stage, **not an instruction to
-provision before account/region/budget selection**:
+## Select the target and Terraform state
+
+Before a real AWS plan or apply, choose the profile, exact account ID, region,
+monthly budget and alert route. Copy `terraform.tfvars.example` to
+`terraform.tfvars` in this directory and replace its synthetic values. The provider's
+`allowed_account_ids` rejects credentials for a different account. Credentials
+come from your normal AWS login/profile; never put keys in variables or chat.
+
+Terraform state tracks provisioned resources. It is separate from the application's
+`paper/state.json` investment ledger. Keep both private and backed up. Terraform
+defaults to local state. For an initial single-maintainer paper deployment, keep
+`deploy/terraform.tfstate` and its backups private and backed up; losing this file
+loses Terraform's resource mappings, while the application ledger remains in S3.
+Use a durable private backend for shared or unattended infrastructure management.
+To use an **existing, separately approved** private S3 state bucket:
+
+1. Copy `backend.tf.example` to `backend.tf` and `backend.hcl.example` to
+   `private.backend.hcl` inside `deploy/`.
+2. Choose the state bucket, region and profile. Keep the dedicated
+   `etf-autopilot-paper/terraform.tfstate` key; do not reuse another project's state.
+3. Confirm the bucket has public access blocked, encryption, versioning and scoped
+   access. The backend identity needs access to this state and its `.tflock` object.
+4. Initialize with the command below. If Terraform detects pre-existing local state,
+   stop and review any state migration before proceeding.
 
 ```sh
-sam deploy --template-file deploy/template.yaml --stack-name etf-autopilot-paper \
-  --resolve-s3 --capabilities CAPABILITY_IAM \
-  --region YOUR_REGION --profile YOUR_PROFILE --confirm-changeset \
-  --parameter-overrides ScheduleState=DISABLED
+terraform -chdir=deploy init -input=false -lockfile=readonly \
+  -backend-config=private.backend.hcl
 ```
 
-Confirm the change set contains only this stack's resources. No Terraform or
-sibling application resources are involved. `sam --resolve-s3` also uses a managed
-artifact bucket; review its storage/lifecycle. The private state bucket and log
-group are retained on stack deletion. Old noncurrent state versions expire after
-30 days; current state retains the cumulative journal until the size cap. Keep
-separate archival backups before any migration or resource removal.
+The optional backend bucket is not created by this module; its selection/bootstrap
+is a separate account setup task. `.gitignore`, the privacy hooks and the source-package
+allowlist exclude real variable/backend files, provider caches, state and plans.
+The provider lock file and placeholder examples are public. Do not upload a raw
+workspace archive or put a backend file with credentials into a release package.
+
+Sources: [S3 backend and locking](https://developer.hashicorp.com/terraform/language/backend/s3),
+[provider mocking](https://developer.hashicorp.com/terraform/language/tests/mocking),
+[Scheduler trust boundary](https://docs.aws.amazon.com/scheduler/latest/UserGuide/cross-service-confused-deputy-prevention.html).
+
+## Review a deployment plan
+
+Only after account/region/budget and the state arrangement are selected:
+
+```sh
+.venv/bin/python scripts/package_lambda.py
+terraform -chdir=deploy plan -input=false -out=review.tfplan
+terraform -chdir=deploy show -no-color review.tfplan
+```
+
+Review every proposed resource. They must belong only to this root, with paper mode
+and scheduling disabled. A plan file can contain sensitive data; keep it local and
+ignored. After the owner approves that exact plan, the deployment command is:
+
+```sh
+terraform -chdir=deploy apply review.tfplan
+```
+
+Offline checks do not run real account plans or applies. Account-specific plans
+remain local and require review before paid provisioning. There is no VPC, NAT or
+SAM artifact bucket. The application state bucket and log group have `prevent_destroy`;
+the bucket also refuses forced emptying. Old noncurrent ledger versions expire after
+30 days while the current object retains the cumulative journal until its size cap.
+Keep separate archival backups before migration or resource removal.
 
 ## One finite paper run and verification
 
-After approved deployment, obtain the exact WorkerName and StateBucketName from
-this stack's CloudFormation outputs. Extract one event with Python, without keys:
+After approved deployment, obtain the exact names with
+`terraform -chdir=deploy output -raw worker_name` and
+`terraform -chdir=deploy output -raw state_bucket_name`.
+Extract one event with Python, without keys:
 
 ```sh
 .venv/bin/python - <<'PY'
@@ -133,12 +193,13 @@ outside simulated state is allowed in a CAS transition.
 ## Start, stop and remove
 
 There is no continuously running worker. The daily health schedule starts disabled.
-Only after verification, enable the `ScheduleState` parameter in a reviewed update.
-To stop scheduled runs, set it back to `DISABLED`; to prevent manual execution as
-well, set the worker's reserved concurrency to zero using its exact function name.
-Neither operation erases state or sells assets.
+Only after verification, set `enable_health_schedule = true` in a reviewed Terraform
+update. To stop scheduled runs, set it back to `false`. Set
+`worker_reserved_concurrency = 0` to stop manual invocation as well. Review a fresh
+plan before applying either update. Neither operation erases state or sells assets.
 
-A future removal uses a change set for **this stack only**. Retained S3/log resources
-continue to exist and can incur storage costs. Back up audit history and ask the
-user before permanent data/resource deletion. Never remove another project's
-resources or apply broad infrastructure changes.
+Terraform intentionally blocks destroying the protected state bucket/log group
+while their `prevent_destroy` rules remain in this configuration. Stopping execution
+still leaves storage costs. Removal requires a separate reviewed plan, backups and
+the owner's explicit deletion authorization. Never remove another project's
+resources or use its Terraform state. No broad infrastructure changes are needed.

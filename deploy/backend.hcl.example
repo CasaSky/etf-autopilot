@@ -1,0 +1,7 @@
+# Copy to private.backend.hcl; never put credentials in this file.
+bucket       = "YOUR_PRIVATE_TERRAFORM_STATE_BUCKET"
+key          = "etf-autopilot-paper/terraform.tfstate"
+region       = "YOUR_REGION"
+profile      = "YOUR_PROFILE"
+encrypt      = true
+use_lockfile = true

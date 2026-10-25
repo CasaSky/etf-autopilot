@@ -17,6 +17,18 @@ dist/
 .aws/
 *.pem
 
+# Terraform downloads and private deployment state/configuration.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+*.backend.hcl
+deploy/backend.tf
+crash.log
+crash.*.log
+
 # Maintainer-local research, account setup and agent/session context.
 .codex/
 .agents/

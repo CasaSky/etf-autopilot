@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars only after choosing the account, region and budget.
+# This account ID is a synthetic example, not a deployment target.
+aws_account_id = "123456789012"
+aws_region     = "eu-central-1"
+aws_profile    = "YOUR_PROFILE"
+
+enable_health_schedule      = false
+worker_reserved_concurrency = 1

@@ -63,6 +63,15 @@ def check(root, env, *arguments, stdin=None):
         "docs/SETUP.md",
         ".env",
         "var/paper.sqlite3",
+        "deploy/.terraform/providers/cache",
+        "deploy/terraform.tfstate",
+        "deploy/terraform.tfstate.backup",
+        "deploy/review.tfplan",
+        "deploy/terraform.tfvars",
+        "deploy/account.tfvars.json",
+        "deploy/private.backend.hcl",
+        "deploy/backend.tf",
+        "deploy/crash.123.log",
     ],
 )
 def test_force_added_private_paths_are_rejected(repository, path):
@@ -84,6 +93,11 @@ def test_public_ai_source_and_documentation_are_allowed(repository):
         "tests/test_research_cli.py",
         "docs/DATA_EVALUATION.md",
         ".env.example",
+        "deploy/main.tf",
+        "deploy/.terraform.lock.hcl",
+        "deploy/terraform.tfvars.example",
+        "deploy/backend.tf.example",
+        "deploy/backend.hcl.example",
     ):
         file = root / path
         file.parent.mkdir(parents=True, exist_ok=True)

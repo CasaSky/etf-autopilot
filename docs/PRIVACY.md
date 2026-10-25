@@ -22,6 +22,10 @@ automatically. Keep hook scripts executable on systems that require it.
 
 The checker protects agent/config directories, instruction files, handoff/research
 notes, personal setup/status documents, credentials and runtime state by path.
+Terraform provider caches, real variable/backend files, state, saved plans and
+crash logs are private too. Commit the provider lock file and placeholder examples;
+keep the generated deployment files local. Source packages use an explicit list
+of public Terraform files so ignored backend/state files cannot enter an archive.
 It allows public agent implementation code and synthetic test fixtures. It does
 not scan all file contents or detect private text copied into a public file under
 another name. Review the source candidate and its history before publication.

@@ -10,9 +10,18 @@ import subprocess
 import sys
 from pathlib import PurePosixPath
 
-PRIVATE_DIRECTORIES = {".agents", ".codex", ".aws", ".venv", "research", "private", "var"}
+PRIVATE_DIRECTORIES = {
+    ".agents",
+    ".codex",
+    ".aws",
+    ".venv",
+    ".terraform",
+    "research",
+    "private",
+    "var",
+}
 PRIVATE_FILENAMES = {"agents.md", "agent.md", "claude.md", "gemini.md"}
-PRIVATE_PATHS = {"docs/setup.md", "docs/status.md"}
+PRIVATE_PATHS = {"docs/setup.md", "docs/status.md", "deploy/backend.tf"}
 
 
 def private_path(path):
@@ -27,6 +36,10 @@ def private_path(path):
         or "/".join(lower) in PRIVATE_PATHS
         or (name.startswith(".env") and name != ".env.example")
         or name.endswith((".sqlite3", ".pem", ".key"))
+        or name.endswith((".tfstate", ".tfplan", ".tfvars", ".tfvars.json", ".backend.hcl"))
+        or ".tfstate." in name
+        or name == "crash.log"
+        or (name.startswith("crash.") and name.endswith(".log"))
     )
 
 

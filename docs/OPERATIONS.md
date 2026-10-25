@@ -66,7 +66,7 @@ See [deployment guide](../deploy/README.md). The daily health schedule is disabl
 on deployment and only reads state; it never initiates orders or model calls.
 Inspect CloudWatch logs and the failure queue for infrastructure failures. Handled
 business halts are logged as structured `status: halted` results, so an empty
-failure queue does not imply healthy trading. The initial stack has no external
+failure queue does not imply healthy trading. The initial Terraform module has no external
 notification destination; wire the user's chosen alert route before unattended use.
 
 Only app-scoped resources are accessed. There are no cross-project permissions,

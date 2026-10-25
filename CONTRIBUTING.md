@@ -60,8 +60,9 @@ pytest -q
 python -S examples/paper_demo.py
 ```
 
-For deployment changes, also run `cfn-lint deploy/template.yaml` and
-`python scripts/package_lambda.py`. Do not use live quote acceptance as a test.
+For deployment changes, package the worker and run the credential-free Terraform
+checks in the [deployment guide](deploy/README.md). The AWS provider is mocked in
+these tests. Do not use live quote acceptance as a test.
 AI-assisted contributions follow the same review and verification requirements;
 contributors need to understand the code and its assumptions.
 
