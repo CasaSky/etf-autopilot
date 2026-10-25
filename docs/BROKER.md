@@ -67,6 +67,21 @@ initial ISIN lookup; multiple matches are rejected. Use a new output filename fo
 a new observation. Catalog active flags do not establish account permission or
 price availability. Identity snapshots never add funds to the strategy automatically.
 
+For an already reasoned research shortlist, `broker-universe` checks one to five
+distinct ISINs in one hidden-key session:
+
+```sh
+etf-autopilot broker-universe --isin FIRST_RESEARCH_ISIN --isin SECOND_RESEARCH_ISIN \
+  --expires-at YOUR_ACTUAL_UTC_EXPIRY_TIMESTAMP --out var/research-catalog.json
+```
+
+It makes one catalog read per ISIN, saves raw public catalog evidence privately
+and prints only a receipt/count. Ambiguous, missing or incomplete listings remain
+`review_required`; no fund is substituted. A UUID cannot bind to two different
+ISINs. It reads no holdings/tickers or account history, makes no model call and
+never selects a fund or changes the strategy. Catalog availability and active
+flags still do not prove account eligibility, spread or execution quality.
+
 ## Capture the ticker contract
 
 After the read-only account setup, `broker-market` can capture one catalog lookup

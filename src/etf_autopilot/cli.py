@@ -53,6 +53,12 @@ def main(argv=None):
         asset.add_argument("--asset-id", help="Require a previously reviewed listing UUID")
         asset.add_argument("--expires-at", help="UTC expiry timestamp; securely prompt for the key")
         asset.add_argument("--out", required=True, help="New immutable evidence JSON")
+    universe = commands.add_parser(
+        "broker-universe", help="Check up to five research-candidate ISINs in one read-only session"
+    )
+    universe.add_argument("--isin", action="append", required=True)
+    universe.add_argument("--expires-at", help="UTC expiry timestamp; securely prompt for the key")
+    universe.add_argument("--out", required=True, help="New immutable private catalog evidence")
     verify_asset = commands.add_parser(
         "asset-verify", help="Check a saved catalog response offline"
     )
@@ -143,7 +149,7 @@ def main(argv=None):
             identity = resolve_etf(payload, args.isin, expected_id)
             print(json.dumps({"status": "verified_local_payload", "identity": identity}, indent=2))
             return 0
-        if args.command in {"broker-check", "broker-asset", "broker-market"}:
+        if args.command in {"broker-check", "broker-asset", "broker-market", "broker-universe"}:
             if args.command in {"broker-asset", "broker-market"}:
                 from .instruments import asset_uuid, validate_isin
 
@@ -157,9 +163,14 @@ def main(argv=None):
                     credentials_from_environment,
                     inspect_asset,
                     inspect_market,
+                    inspect_universe,
+                    validate_universe_isins,
                 )
             except ImportError:
                 raise SafetyError("broker_dependencies_missing_install_broker_extra") from None
+
+            if args.command == "broker-universe":
+                validate_universe_isins(args.isin)
 
             if args.expires_at and not sys.stdin.isatty():
                 raise SafetyError("interactive_terminal_required_for_secret_prompt")
@@ -168,6 +179,28 @@ def main(argv=None):
                 if args.expires_at
                 else credentials_from_environment()
             )
+            if args.command == "broker-universe":
+                from .history import write_immutable_json
+
+                evidence = asyncio.run(inspect_universe(credentials, args.isin))
+                write_immutable_json(args.out, evidence)
+                print(
+                    json.dumps(
+                        {
+                            "status": "research_catalog_saved",
+                            "path": str(Path(args.out).resolve()),
+                            "evidence_id": evidence["evidence_id"],
+                            "rows_checked": len(evidence["rows"]),
+                            "identities_resolved": sum(
+                                row["status"] == "identity_resolved" for row in evidence["rows"]
+                            ),
+                            "fund_selection": "none",
+                            "trading": "unavailable",
+                        },
+                        indent=2,
+                    )
+                )
+                return 0
             if args.command in {"broker-asset", "broker-market"}:
                 from .history import write_immutable_json
 

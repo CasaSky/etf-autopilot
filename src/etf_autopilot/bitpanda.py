@@ -242,6 +242,49 @@ async def inspect_market(credentials, isin, expected_asset_id=None):
         return {**evidence, "evidence_id": digest(evidence)}
 
 
+def validate_universe_isins(isins):
+    if not isinstance(isins, list) or not 1 <= len(isins) <= 5:
+        raise SafetyError("one_to_five_research_isins_required")
+    for isin in isins:
+        validate_isin(isin)
+    if len(set(isins)) != len(isins):
+        raise SafetyError("duplicate_research_isin")
+
+
+async def inspect_universe(credentials, isins):
+    """One bounded catalog session; availability evidence never selects investments."""
+    validate_universe_isins(isins)
+    rows, identifiers = [], set()
+    async with connect(credentials) as client:
+        for isin in isins:
+            arguments = _asset_arguments(isin, None)
+            payload = await client.call("list_assets", arguments)
+            row = {"isin": isin, "arguments": arguments, "catalog_response": payload}
+            try:
+                identity = resolve_etf(payload, isin)
+            except SafetyError as exc:
+                row.update(status="review_required", code=str(exc))
+            else:
+                identifier = identity["broker_asset_id"]
+                if identifier in identifiers:
+                    raise SafetyError("universe_asset_id_collision")
+                identifiers.add(identifier)
+                row.update(status="identity_resolved", identity=identity)
+            rows.append(row)
+        evidence = {
+            "version": 1,
+            "source": ENDPOINT,
+            "retrieved_at": datetime.now(UTC).isoformat(),
+            "catalog_hash": digest(client.catalog),
+            "rows": rows,
+            "purpose": "research_universe_catalog_review_only",
+            "fund_selection": "none",
+            "account_eligibility": "unverified",
+            "trading": "unavailable",
+        }
+        return {**evidence, "evidence_id": digest(evidence)}
+
+
 def credentials_from_environment():
     key = os.environ.get("BITPANDA_API_KEY")
     expiry = os.environ.get("BITPANDA_KEY_EXPIRES_AT")

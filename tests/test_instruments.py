@@ -261,3 +261,79 @@ def test_market_capture_cli_prints_receipt_without_raw_response(monkeypatch, tmp
     assert marker not in printed and "fixture-key-never-print" not in printed
     assert json.loads(printed)["status"] == "market_contract_saved"
     assert json.loads(output.read_text()) == evidence
+
+
+def test_research_universe_reuses_one_session_and_only_reads_requested_catalogs(
+    monkeypatch, catalog_payload
+):
+    second = "ZZ0000000024"
+    calls, sessions = [], []
+
+    class Client:
+        catalog = {"list_assets": {}}
+
+        async def call(self, name, arguments):
+            assert name == "list_assets"
+            calls.append(arguments)
+            identity = {**catalog_payload["data"][0], "isin": arguments["isin"]}
+            if arguments["isin"] == second:
+                identity["id"] = OTHER_ID
+            return {"data": [identity], "has_next_page": False}
+
+    @asynccontextmanager
+    async def connect(_):
+        sessions.append(1)
+        yield Client()
+
+    monkeypatch.setattr(bitpanda, "connect", connect)
+    evidence = asyncio.run(bitpanda.inspect_universe(None, [ISIN, second]))
+    assert sessions == [1] and [row["isin"] for row in calls] == [ISIN, second]
+    assert all(row["status"] == "identity_resolved" for row in evidence["rows"])
+    assert evidence["fund_selection"] == "none" and evidence["account_eligibility"] == "unverified"
+    assert (
+        digest({k: v for k, v in evidence.items() if k != "evidence_id"}) == evidence["evidence_id"]
+    )
+
+
+def test_unavailable_research_candidate_is_recorded_without_substitution(monkeypatch):
+    class Client:
+        catalog = {"list_assets": {}}
+
+        async def call(self, name, arguments):
+            return {"data": [], "has_next_page": False}
+
+    @asynccontextmanager
+    async def connect(_):
+        yield Client()
+
+    monkeypatch.setattr(bitpanda, "connect", connect)
+    evidence = asyncio.run(bitpanda.inspect_universe(None, [ISIN]))
+    assert evidence["rows"][0]["status"] == "review_required"
+    assert evidence["rows"][0]["code"] == "expected_real_etf_not_found"
+    assert "identity" not in evidence["rows"][0]
+
+
+def test_research_catalog_cannot_bind_one_uuid_to_distinct_isins(monkeypatch, catalog_payload):
+    class Client:
+        catalog = {"list_assets": {}}
+
+        async def call(self, name, arguments):
+            return {
+                "data": [{**catalog_payload["data"][0], "isin": arguments["isin"]}],
+                "has_next_page": False,
+            }
+
+    @asynccontextmanager
+    async def connect(_):
+        yield Client()
+
+    monkeypatch.setattr(bitpanda, "connect", connect)
+    with pytest.raises(SafetyError, match="universe_asset_id_collision"):
+        asyncio.run(bitpanda.inspect_universe(None, [ISIN, "ZZ0000000024"]))
+
+
+@pytest.mark.parametrize("isins", [[], [ISIN] * 6, [ISIN, ISIN], ["invalid"]])
+def test_universe_arguments_are_bounded_before_connecting(monkeypatch, isins):
+    monkeypatch.setattr(bitpanda, "connect", lambda _: pytest.fail("No network for invalid input"))
+    with pytest.raises(SafetyError):
+        asyncio.run(bitpanda.inspect_universe(None, isins))
