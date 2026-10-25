@@ -10,6 +10,7 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
 - Deterministic allocation/policy checks, simulated execution and reconciliation.
 - Dataset import, chronological evaluation and persistent holdout-exposure tracking.
 - Typed broker ETF identity checks and an offline daily-export adapter with provenance.
+- A free issuer-growth export adapter with explicit reference FX and calendar exclusions.
 - Optional read-only Public MCP and bounded diagnosis library interfaces.
 - Bounded paper hypothesis choice, durable inference reservations and a scripted example.
 - A finite recurring cycle with runtime freshness and duplicate protection.
@@ -17,8 +18,9 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
 
 ## Next: connect verified data
 
-The [local EODHD export adapter](PROVIDER_IMPORT.md) and deterministic broker identity
-resolver are implemented. Complete source access/licensing and independent fund,
+The [local daily export adapter](PROVIDER_IMPORT.md), [free issuer adapter](ISSUER_IMPORT.md)
+and deterministic broker identity resolver are implemented. Complete source
+access/licensing and independent fund,
 currency and calendar verification before genuine historical evaluation. Keep
 provider parsing outside the financial engine and vendor datasets private. Public
 synthetic examples let contributors reproduce bugs without an account.

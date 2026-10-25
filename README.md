@@ -75,6 +75,7 @@ framework, server or cloud deployment is required to understand the core.
 - [Architecture](docs/ARCHITECTURE.md): understand the core and its boundaries.
 - [Data and evaluation](docs/DATA_EVALUATION.md): import data and run a fixed protocol.
 - [Provider import](docs/PROVIDER_IMPORT.md): convert daily exports with explicit timing assumptions.
+- [Free issuer exports](docs/ISSUER_IMPORT.md): import fund-growth files with explicit EUR conversion.
 - [Bounded decisions](docs/AI_DECISIONS.md): try the scripted choice workflow and understand recovery.
 - [Roadmap](docs/ROADMAP.md): see the next useful pieces and starter contributions.
 - [Contributing](CONTRIBUTING.md): set up development and make a focused change.

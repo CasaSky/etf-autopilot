@@ -264,10 +264,20 @@ def evaluate_window(dataset, base_config, protocol, window_name):
                 "Retrospectively adjusted closes are vendor dividend/split proxies; "
                 "availability is an assumed 24-hour lag, not verified point-in-time history."
                 if dataset["manifest"]["version"] == 2
+                else "Issuer fund-growth proxies can be revised; availability uses an assumed "
+                "24-hour lag, not verified point-in-time history."
+                if dataset["manifest"]["version"] == 3
                 else "Indices assume reinvested distributions; investor taxes are excluded."
             ),
-            "Currency/share-class bindings and the supplied trading calendar need independent "
-            "verification; no FX conversion or missing-bar interpolation is performed.",
+            (
+                "USD fund indices use same-date ECB reference FX, not executable FX quotes. "
+                "Dates must be shared by both funds and ECB; exclusions are recorded, "
+                "no imputation."
+                if dataset["manifest"]["version"] == 3
+                else "Currency/share-class bindings and the supplied trading calendar need "
+                "independent verification; no FX conversion or missing-bar interpolation "
+                "is performed."
+            ),
             "Cash earns zero; fees/spread and operating costs are modeled assumptions.",
             "Monthly observation drawdown omits intramonth losses and real fill uncertainty.",
             "Each window restarts with the same capital; the last observation is valuation only.",
@@ -414,6 +424,9 @@ def evaluation_markdown(result):
         (
             "Prices are unitized adjusted-close research proxies, not broker quotes."
             if result["price_basis"] == "unitized_adjusted_close_proxy"
+            else "Prices are unitized issuer fund-return proxies with reference FX, "
+            "not broker quotes."
+            if result["price_basis"] == "unitized_issuer_return_proxy"
             else "Prices are unitized total-return research indices, not broker quotes."
         ),
         "",

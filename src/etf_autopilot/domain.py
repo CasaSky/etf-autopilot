@@ -90,7 +90,11 @@ def validate_config(config: dict) -> None:
             or not re.fullmatch(r"[0-9a-f]{64}", contract["dataset_id"])
             or contract["origin"] not in {"synthetic_fixture", "declared_historical"}
             or contract["price_basis"]
-            not in {"unitized_total_return", "unitized_adjusted_close_proxy"}
+            not in {
+                "unitized_total_return",
+                "unitized_adjusted_close_proxy",
+                "unitized_issuer_return_proxy",
+            }
             or contract["broker_mapping"] != "unverified"
             or len(config["assets"]) != 2
             or {a["class"] for a in config["assets"].values()} != {"equity", "bond"}

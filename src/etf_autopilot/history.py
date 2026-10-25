@@ -38,6 +38,16 @@ EODHD_POLICY = {
     "execution": "later_daily_close_in_following_month",
     "adjustments": "retrospective_split_and_dividend_proxy",
 }
+ISSUER_POLICY = {
+    "adapter": "ishares_growth_ecb_v1",
+    "availability": "assumed_24h_after_utc_day_end",
+    "execution": "later_fund_return_proxy_in_following_month",
+    "adjustments": "issuer_revised_fund_growth_with_income_reinvested",
+    "calendar": "joint_observation_dates_without_imputation",
+    "normalization": "first_joint_observation_100",
+    "xml": "financial_prefix_only_full_file_hash",
+}
+ECB_HISTORY_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml"
 MAX_IMPORT_BYTES = 5_000_000
 MAX_PERIODS = 1200
 
@@ -66,16 +76,20 @@ def validate_manifest(manifest):
     if not isinstance(manifest, dict) or type(manifest.get("version")) is not int:
         raise SafetyError("unsupported_history_manifest")
     version = manifest["version"]
-    if version not in {1, 2} or set(manifest) != (
-        required | {"provenance"} if version == 2 else required
+    if version not in {1, 2, 3} or set(manifest) != (
+        required | {"provenance"} if version > 1 else required
     ):
         raise SafetyError("unsupported_history_manifest")
     if manifest["origin"] not in {"synthetic_fixture", "declared_historical"}:
         raise SafetyError("history_origin_required")
-    basis = "unitized_total_return" if version == 1 else "unitized_adjusted_close_proxy"
+    basis = {
+        1: "unitized_total_return",
+        2: "unitized_adjusted_close_proxy",
+        3: "unitized_issuer_return_proxy",
+    }[version]
     if manifest["price_basis"] != basis or manifest["currency"] != "EUR":
         raise SafetyError("eur_total_return_indices_required")
-    if manifest["assumptions"] != (ASSUMPTIONS if version == 1 else ADJUSTED_ASSUMPTIONS):
+    if manifest["assumptions"] != (ADJUSTED_ASSUMPTIONS if version == 2 else ASSUMPTIONS):
         raise SafetyError("unsupported_history_assumptions")
     if not isinstance(manifest["provider"], str) or not 1 <= len(manifest["provider"]) <= 160:
         raise SafetyError("history_provider_required")
@@ -123,6 +137,8 @@ def validate_manifest(manifest):
         isins.add(item["isin"])
     if classes != {"equity", "bond"} or len(isins) != 2:
         raise SafetyError("distinct_equity_and_bond_instruments_required")
+    if version == 3:
+        validate_issuer_provenance(manifest)
     if version == 2:
         provenance = manifest["provenance"]
         if (
@@ -168,6 +184,72 @@ def validate_manifest(manifest):
                 or source_url.fragment
             ):
                 raise SafetyError("public_binding_evidence_url_required")
+
+
+def validate_issuer_provenance(manifest):
+    provenance = manifest["provenance"]
+    if (
+        not isinstance(provenance, dict)
+        or set(provenance) != set(ISSUER_POLICY) | {"usage_rights", "sources", "fx"}
+        or any(provenance[key] != value for key, value in ISSUER_POLICY.items())
+        or provenance["usage_rights"]
+        != (
+            "synthetic_fixture"
+            if manifest["origin"] == "synthetic_fixture"
+            else "operator_confirmed_private_analysis"
+        )
+        or not isinstance(provenance["sources"], dict)
+        or set(provenance["sources"]) != set(manifest["instruments"])
+    ):
+        raise SafetyError("unsupported_issuer_provenance")
+    fx = provenance["fx"]
+    if (
+        not isinstance(fx, dict)
+        or set(fx) != {"source_url", "raw_sha256", "conversion"}
+        or (
+            fx["source_url"] != ECB_HISTORY_URL
+            or fx["conversion"] != "divide_USD_fund_index_by_same_date_USD_per_EUR"
+        )
+    ):
+        raise SafetyError("unsupported_issuer_fx_provenance")
+    sources = provenance["sources"]
+    for source in sources.values():
+        if not isinstance(source, dict) or set(source) != {
+            "native_currency",
+            "fund_name",
+            "raw_sha256",
+            "binding_sha256",
+            "binding_evidence_url",
+            "undated_benchmark_rows",
+            "prelaunch_seed_rows",
+            "excluded_nonjoint_dates",
+        }:
+            raise SafetyError("unsupported_issuer_source")
+        if (
+            not isinstance(source["native_currency"], str)
+            or source["native_currency"] not in {"EUR", "USD"}
+            or not isinstance(source["fund_name"], str)
+            or not 1 <= len(source["fund_name"]) <= 160
+        ):
+            raise SafetyError("invalid_issuer_source_identity")
+        for key in ("undated_benchmark_rows", "prelaunch_seed_rows", "excluded_nonjoint_dates"):
+            if type(source[key]) is not int or not 0 <= source[key] <= 50_000:
+                raise SafetyError("invalid_issuer_source_count")
+        if not isinstance(source["binding_evidence_url"], str):
+            raise SafetyError("public_binding_evidence_url_required")
+        url = urlparse(source["binding_evidence_url"])
+        if (
+            url.scheme != "https"
+            or not url.hostname
+            or any((url.username, url.password, url.query, url.fragment))
+        ):
+            raise SafetyError("public_binding_evidence_url_required")
+    for source in [fx, *sources.values()]:
+        for key in ("raw_sha256", "binding_sha256"):
+            if key in source and (
+                not isinstance(source[key], str) or not re.fullmatch(r"[0-9a-f]{64}", source[key])
+            ):
+                raise SafetyError("invalid_provider_source_hash")
 
 
 def _rows_from_csv(raw, manifest):

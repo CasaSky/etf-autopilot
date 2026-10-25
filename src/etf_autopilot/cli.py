@@ -76,6 +76,14 @@ def main(argv=None):
     provider.add_argument("equity_json")
     provider.add_argument("bond_json")
     provider.add_argument("--out-dir", required=True)
+    issuer = commands.add_parser(
+        "history-issuer", help="Convert local issuer growth exports and ECB reference FX"
+    )
+    issuer.add_argument("spec")
+    issuer.add_argument("equity_xml")
+    issuer.add_argument("bond_xml")
+    issuer.add_argument("ecb_xml")
+    issuer.add_argument("--out-dir", required=True)
     evaluation_plan = commands.add_parser(
         "evaluation-plan", help="Write a fixed evaluation protocol"
     )
@@ -184,11 +192,19 @@ def main(argv=None):
                 return 0
             print(json.dumps(asyncio.run(check_account(credentials)), indent=2))
             return 0
-        if args.command == "history-eodhd":
+        if args.command in {"history-eodhd", "history-issuer"}:
             from .history import dataset_receipt
-            from .providers import import_eodhd
 
-            dataset = import_eodhd(args.spec, args.equity_json, args.bond_json, args.out_dir)
+            if args.command == "history-issuer":
+                from .issuer import import_issuer
+
+                dataset = import_issuer(
+                    args.spec, args.equity_xml, args.bond_xml, args.ecb_xml, args.out_dir
+                )
+            else:
+                from .providers import import_eodhd
+
+                dataset = import_eodhd(args.spec, args.equity_json, args.bond_json, args.out_dir)
             print(
                 json.dumps(
                     {

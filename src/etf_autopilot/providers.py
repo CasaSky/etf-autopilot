@@ -181,6 +181,13 @@ def _prepare(spec, paths):
         "provenance": {**EODHD_POLICY, "usage_rights": spec["usage_rights"], "sources": sources},
     }
     validate_manifest(manifest)
+    raw_csv = monthly_csv(spec, series)
+    _rows_from_csv(raw_csv, manifest)
+    return manifest, raw_csv
+
+
+def monthly_csv(spec, series):
+    """Convert aligned dated research observations; never fill missing bars."""
     start, end = period_number(spec["signal_start"]), period_number(spec["signal_end"])
     if not 12 <= end - start + 1 <= 1200:
         raise SafetyError("provider_requires_12_to_1200_signal_months")
@@ -231,8 +238,7 @@ def _prepare(spec, paths):
                 }
             )
     raw_csv = text.getvalue().encode()
-    _rows_from_csv(raw_csv, manifest)
-    return manifest, raw_csv
+    return raw_csv
 
 
 def import_eodhd(spec_path, equity_path, bond_path, output_directory):
@@ -240,6 +246,13 @@ def import_eodhd(spec_path, equity_path, bond_path, output_directory):
     if spec_path.stat().st_size > 100_000:
         raise SafetyError("provider_spec_size_limit")
     manifest, raw_csv = _prepare(load_json(spec_path), {"equity": equity_path, "bond": bond_path})
+    return write_import(manifest, raw_csv, output_directory)
+
+
+def write_import(manifest, raw_csv, output_directory):
+    """Write already validated provider conversion artifacts immutably."""
+    validate_manifest(manifest)
+    _rows_from_csv(raw_csv, manifest)
     directory = Path(output_directory)
     # Validate the complete conversion before creating any output artifact.
     write_immutable_json(directory / "manifest.json", manifest)
