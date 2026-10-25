@@ -4,6 +4,11 @@ Contributions are welcome in code, documentation, examples and reproducible data
 adapters. Start with the [roadmap](docs/ROADMAP.md), then choose a small change with
 a clear outcome. No broker account, cloud subscription or model access is needed.
 
+Anyone can open an issue or submit a pull request from a fork. The repository owner,
+[@CasaSky](https://github.com/CasaSky), controls branch updates and merges. Pull
+requests do not start this repository's workflows. CI runs only after the owner
+pushes to `main`; include your local verification results in the pull request.
+
 ## Set up development
 
 From a checkout with Python 3.13 or later:
