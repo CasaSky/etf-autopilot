@@ -1,10 +1,17 @@
 # AWS paper deployment with Terraform
 
-**Prepared and statically validated; not deployed.** The required next choices are
-AWS profile/account, region, monthly budget and alert route. No broker credentials,
+**Validated locally and smoke-tested in an isolated AWS paper deployment.** Each
+installation needs an explicit AWS profile/account, region and monthly budget,
+plus an alert route before unattended operation. No broker credentials,
 permanent broker budget, model permissions or money are configured by this module.
 Use only this repository's `deploy/` root and its `etf-autopilot-paper` resources.
 Terraform replaces the earlier SAM template; there is one infrastructure definition.
+
+The deployed smoke check completed one synthetic event, replayed it without changing
+the ledger, reconciled all three comparison accounts and verified operational paper
+health, encrypted state and log delivery. The health schedule stayed disabled.
+This verifies deployment/accounting behavior; investment performance and AI effects
+are still untested with real market data.
 
 ## Resources and limits
 
@@ -29,9 +36,10 @@ Scheduler → Lambda with S3 CAS persistence, not a GitHub scheduled trading loo
 
 ## Reviewable cost estimate
 
-Planning estimate, 24 October 2026; recheck selected-region rates before deployment.
-This deliberately assumes no free-tier credit. Illustrative conservative USD unit
-rates below are **budget assumptions, not verified Frankfurt price quotes**.
+Planning estimate, 25 October 2026, without free-tier credit. Compute, state-storage
+and log rates were checked against AWS's public Frankfurt catalogs. The rounded USD
+unit rates below remain conservative **budget assumptions rather than price quotes**;
+recheck the selected region and workload before each deployment.
 
 | Item | Assumed monthly quantity | Planning unit rate | Estimate USD/month |
 |---|---:|---:|---:|
@@ -63,6 +71,10 @@ Sources: [Lambda pricing](https://aws.amazon.com/lambda/pricing/),
 [EventBridge pricing](https://aws.amazon.com/eventbridge/pricing/),
 [Scheduler and Lambda](https://docs.aws.amazon.com/lambda/latest/dg/with-eventbridge-scheduler.html),
 [S3 conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html).
+
+Catalog checks: [Frankfurt Lambda](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSLambda/current/eu-central-1/index.json),
+[Frankfurt S3](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/eu-central-1/index.json),
+[Frankfurt CloudWatch](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/eu-central-1/index.json).
 
 ## Build and inspect locally
 
@@ -197,6 +209,20 @@ Only after verification, set `enable_health_schedule = true` in a reviewed Terra
 update. To stop scheduled runs, set it back to `false`. Set
 `worker_reserved_concurrency = 0` to stop manual invocation as well. Review a fresh
 plan before applying either update. Neither operation erases state or sells assets.
+
+For local Terraform state, update its private backup after each approved apply.
+One option is the infrastructure-only key inside this application's encrypted,
+versioned bucket; the worker's read permissions cover only its paper input/ledger:
+
+```sh
+aws s3 cp deploy/terraform.tfstate \
+  s3://YOUR_STATE_BUCKET/infrastructure/terraform-state-backup.json \
+  --sse AES256 --profile YOUR_PROFILE --region YOUR_REGION
+```
+
+Verify the backup and keep a private local copy too. Use the optional S3 backend
+for shared management so infrastructure updates coordinate through remote state
+and locking. Never copy another application's state into this root.
 
 Terraform intentionally blocks destroying the protected state bucket/log group
 while their `prevent_destroy` rules remain in this configuration. Stopping execution

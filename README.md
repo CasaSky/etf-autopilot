@@ -60,12 +60,12 @@ framework, server or cloud deployment is required to understand the core.
 
 | Area | Status |
 |---|---|
-| Paper orders, accounting and recovery | Working locally |
+| Paper orders, accounting and recovery | Verified locally and in the AWS paper worker |
 | Historical import and chronological evaluation | Working; supplied examples are synthetic |
 | Bitpanda Public MCP | Read-only boundary and mock contracts; account mapping unverified |
 | AI diagnosis | Optional library adapter; disabled by default |
 | AI allocation and experiment orchestration | Planned |
-| Recurring AWS investment operation | Planned; a paper worker and disabled health schedule are prepared |
+| Recurring AWS investment operation | Planned; the paper worker is verified, health schedule disabled |
 | Live trading | Unavailable |
 
 ## Explore or contribute
@@ -75,6 +75,7 @@ framework, server or cloud deployment is required to understand the core.
 - [Data and evaluation](docs/DATA_EVALUATION.md): import data and run a fixed protocol.
 - [Roadmap](docs/ROADMAP.md): see the next useful pieces and starter contributions.
 - [Contributing](CONTRIBUTING.md): set up development and make a focused change.
+- [AWS deployment](deploy/README.md): reproduce the isolated paper worker with Terraform.
 - [Security](SECURITY.md) and [community standards](CODE_OF_CONDUCT.md).
 
 For an installed CLI, run `python3 -m pip install -e .` from a checkout.

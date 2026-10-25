@@ -10,7 +10,8 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
 - Deterministic allocation/policy checks, simulated execution and reconciliation.
 - Dataset import, chronological evaluation and persistent holdout-exposure tracking.
 - Optional read-only Public MCP and bounded diagnosis library interfaces.
-- CI and a prepared AWS paper worker; no hosted investment service is running.
+- CI definition, Terraform safety tests and a verified AWS paper-worker deployment;
+  recurring investment decisions remain unimplemented.
 
 ## Next: connect verified data
 
