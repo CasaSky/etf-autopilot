@@ -5,10 +5,9 @@ no supported live-trading release or promised incident-response service level.
 
 ## Report a vulnerability privately
 
-If private vulnerability reporting is enabled on the public GitHub repository,
-use **Security → Report a vulnerability**. Otherwise, ask a maintainer for a private
-channel without including exploit details in a public issue. A maintainer contact
-and the repository reporting feature must be configured before public launch.
+Use [GitHub's private vulnerability report](https://github.com/CasaSky/etf-autopilot/security/advisories/new)
+or **Security → Report a vulnerability**. Private vulnerability reporting is enabled
+for this repository. Do not include exploit details in a public issue.
 
 Include affected behavior, a minimal reproduction using synthetic data, expected
 impact and any suggested correction. Redact credentials, account identifiers,
