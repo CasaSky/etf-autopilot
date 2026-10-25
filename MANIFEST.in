@@ -8,6 +8,7 @@ recursive-include tests *.py
 include docs/README.md docs/ARCHITECTURE.md docs/BROKER.md docs/DATA_EVALUATION.md
 include docs/OPERATIONS.md docs/PUBLISHING.md docs/ROADMAP.md docs/paper-demo.md
 include docs/PRIVACY.md
+include docs/PROVIDER_IMPORT.md
 include deploy/README.md deploy/main.tf deploy/versions.tf deploy/variables.tf deploy/outputs.tf
 include deploy/.terraform.lock.hcl deploy/terraform.tfvars.example
 include deploy/backend.tf.example deploy/backend.hcl.example

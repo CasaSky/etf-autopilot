@@ -244,7 +244,7 @@ def evaluate_window(dataset, base_config, protocol, window_name):
         "engine_fingerprint": protocol["engine_fingerprint"],
         "window": window_name,
         "origin": dataset["manifest"]["origin"],
-        "price_basis": "unitized_total_return",
+        "price_basis": dataset["manifest"]["price_basis"],
         "valuation_start": strategy["first_valuation_at"],
         "valuation_end": strategy["last_valuation_at"],
         "model_calls": 0,
@@ -260,7 +260,14 @@ def evaluate_window(dataset, base_config, protocol, window_name):
         "limitations": [
             "Provider declarations and instrument metadata are not independently verified.",
             "Total-return index units are research proxies, not executable ETF share prices.",
-            "Indices assume reinvested distributions; investor taxes are excluded.",
+            (
+                "Retrospectively adjusted closes are vendor dividend/split proxies; "
+                "availability is an assumed 24-hour lag, not verified point-in-time history."
+                if dataset["manifest"]["version"] == 2
+                else "Indices assume reinvested distributions; investor taxes are excluded."
+            ),
+            "Currency/share-class bindings and the supplied trading calendar need independent "
+            "verification; no FX conversion or missing-bar interpolation is performed.",
             "Cash earns zero; fees/spread and operating costs are modeled assumptions.",
             "Monthly observation drawdown omits intramonth losses and real fill uncertainty.",
             "Each window restarts with the same capital; the last observation is valuation only.",
@@ -404,7 +411,11 @@ def evaluation_markdown(result):
         f"Window: {result['window']}; valuations: {result['valuation_start']} to "
         f"{result['valuation_end']}.",
         "",
-        "Prices are unitized total-return research indices, not broker quotes.",
+        (
+            "Prices are unitized adjusted-close research proxies, not broker quotes."
+            if result["price_basis"] == "unitized_adjusted_close_proxy"
+            else "Prices are unitized total-return research indices, not broker quotes."
+        ),
         "",
         "| Account | Net equity EUR | Net P&L EUR | Return | Max drawdown | Fees EUR | "
         "Spread EUR | Operations EUR | Orders | Halt |",

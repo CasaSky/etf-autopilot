@@ -29,12 +29,30 @@ def main(argv=None):
     broker = commands.add_parser("broker-check", help="Explicit read-only live account check")
     broker.add_argument("--allow-account-read", action="store_true", required=True)
     broker.add_argument("--expires-at", help="UTC expiry timestamp; securely prompt for the key")
+    asset = commands.add_parser("broker-asset", help="Read and bind one real ETF catalog identity")
+    asset.add_argument("--isin", required=True)
+    asset.add_argument("--asset-id", help="Require a previously reviewed listing UUID")
+    asset.add_argument("--expires-at", help="UTC expiry timestamp; securely prompt for the key")
+    asset.add_argument("--out", required=True, help="New immutable identity evidence JSON")
+    verify_asset = commands.add_parser(
+        "asset-verify", help="Check a saved catalog response offline"
+    )
+    verify_asset.add_argument("response")
+    verify_asset.add_argument("--isin", required=True)
+    verify_asset.add_argument("--asset-id")
     history = commands.add_parser(
         "history-import", help="Validate a local monthly return-index CSV"
     )
     history.add_argument("manifest")
     history.add_argument("csv")
     history.add_argument("--out", required=True)
+    provider = commands.add_parser(
+        "history-eodhd", help="Convert local daily adjusted-close exports"
+    )
+    provider.add_argument("spec")
+    provider.add_argument("equity_json")
+    provider.add_argument("bond_json")
+    provider.add_argument("--out-dir", required=True)
     evaluation_plan = commands.add_parser(
         "evaluation-plan", help="Write a fixed evaluation protocol"
     )
@@ -55,9 +73,46 @@ def main(argv=None):
     evaluate.add_argument("--out-dir", default="var/evaluations")
     args = parser.parse_args(argv)
     try:
-        if args.command == "broker-check":
+        if args.command == "asset-verify":
+            from .instruments import asset_uuid, resolve_etf
+
+            path = Path(args.response)
+            if path.stat().st_size > 1_000_000:
+                raise SafetyError("broker_response_too_large")
+            payload = load_json(path)
+            expected_id = args.asset_id
+            if isinstance(payload, dict) and set(payload) == {"tool", "arguments", "response"}:
+                if payload["tool"] != "list_assets" or not isinstance(payload["arguments"], dict):
+                    raise SafetyError("asset_catalog_tool_required")
+                arguments = payload["arguments"]
+                if "isin" in arguments and arguments["isin"] != args.isin:
+                    raise SafetyError("asset_request_isin_mismatch")
+                if "id" in arguments:
+                    if not isinstance(arguments["id"], str):
+                        raise SafetyError("invalid_broker_asset_id")
+                    identifiers = [asset_uuid(item.strip()) for item in arguments["id"].split(",")]
+                    if expected_id is None and len(identifiers) == 1:
+                        expected_id = identifiers[0]
+                    if expected_id is None or asset_uuid(expected_id) not in identifiers:
+                        raise SafetyError("asset_request_uuid_binding_required")
+                payload = payload["response"]
+            identity = resolve_etf(payload, args.isin, expected_id)
+            print(json.dumps({"status": "verified_local_payload", "identity": identity}, indent=2))
+            return 0
+        if args.command in {"broker-check", "broker-asset"}:
+            if args.command == "broker-asset":
+                from .instruments import asset_uuid, validate_isin
+
+                validate_isin(args.isin)
+                if args.asset_id is not None:
+                    asset_uuid(args.asset_id)
             try:
-                from .bitpanda import Credentials, check_account, credentials_from_environment
+                from .bitpanda import (
+                    Credentials,
+                    check_account,
+                    credentials_from_environment,
+                    inspect_asset,
+                )
             except ImportError:
                 raise SafetyError("broker_dependencies_missing_install_broker_extra") from None
 
@@ -68,7 +123,29 @@ def main(argv=None):
                 if args.expires_at
                 else credentials_from_environment()
             )
+            if args.command == "broker-asset":
+                from .history import write_immutable_json
+
+                evidence = asyncio.run(inspect_asset(credentials, args.isin, args.asset_id))
+                write_immutable_json(args.out, evidence)
+                print(json.dumps({"status": "identity_saved", **evidence}, indent=2))
+                return 0
             print(json.dumps(asyncio.run(check_account(credentials)), indent=2))
+            return 0
+        if args.command == "history-eodhd":
+            from .history import dataset_receipt
+            from .providers import import_eodhd
+
+            dataset = import_eodhd(args.spec, args.equity_json, args.bond_json, args.out_dir)
+            print(
+                json.dumps(
+                    {
+                        **dataset_receipt(dataset),
+                        "path": str(Path(args.out_dir).resolve() / "dataset.json"),
+                    },
+                    indent=2,
+                )
+            )
             return 0
         config = load_json(args.config)
         if args.command in {"history-import", "evaluation-plan", "evaluation-register", "evaluate"}:

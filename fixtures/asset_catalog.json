@@ -1,0 +1,17 @@
+{
+  "data": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "Synthetic ETF identity fixture; not an issued instrument",
+      "symbol": "FIXTURE",
+      "isin": "ZZ0000000016",
+      "group": "equity_etf",
+      "type": "equity_security",
+      "buy_active": true,
+      "sell_active": true,
+      "withdrawal_active": false,
+      "deposit_active": false
+    }
+  ],
+  "has_next_page": false
+}

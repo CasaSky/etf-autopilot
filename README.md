@@ -62,7 +62,7 @@ framework, server or cloud deployment is required to understand the core.
 |---|---|
 | Paper orders, accounting and recovery | Verified locally and in the AWS paper worker |
 | Historical import and chronological evaluation | Working; supplied examples are synthetic |
-| Bitpanda Public MCP | Read-only boundary and mock contracts; account mapping unverified |
+| Bitpanda Public MCP | Protocol read verified; typed ETF identity; portfolio mapping pending |
 | AI diagnosis | Optional library adapter; disabled by default |
 | AI allocation and experiment orchestration | Planned |
 | Recurring AWS investment operation | Planned; the paper worker is verified, health schedule disabled |
@@ -73,6 +73,7 @@ framework, server or cloud deployment is required to understand the core.
 - [Documentation](docs/README.md): choose a guide for the task you want to do.
 - [Architecture](docs/ARCHITECTURE.md): understand the core and its boundaries.
 - [Data and evaluation](docs/DATA_EVALUATION.md): import data and run a fixed protocol.
+- [Provider import](docs/PROVIDER_IMPORT.md): convert daily exports with explicit timing assumptions.
 - [Roadmap](docs/ROADMAP.md): see the next useful pieces and starter contributions.
 - [Contributing](CONTRIBUTING.md): set up development and make a focused change.
 - [AWS deployment](deploy/README.md): reproduce the isolated paper worker with Terraform.

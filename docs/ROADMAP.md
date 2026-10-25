@@ -9,16 +9,18 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
 - A credential-free paper example with durable state and a comparison report.
 - Deterministic allocation/policy checks, simulated execution and reconciliation.
 - Dataset import, chronological evaluation and persistent holdout-exposure tracking.
+- Typed broker ETF identity checks and an offline daily-export adapter with provenance.
 - Optional read-only Public MCP and bounded diagnosis library interfaces.
 - CI definition, Terraform safety tests and a verified AWS paper-worker deployment;
   recurring investment decisions remain unimplemented.
 
 ## Next: connect verified data
 
-Add one useful historical provider adapter with source/provenance and redistribution
-terms documented. Verify actual eligible ETF identities through the official broker
-interface. Keep provider parsing out of the financial engine. Include small public
-or synthetic contract fixtures so contributors can reproduce a bug without an account.
+The [local EODHD export adapter](PROVIDER_IMPORT.md) and deterministic broker identity
+resolver are implemented. Complete source access/licensing and independent fund,
+currency and calendar verification before genuine historical evaluation. Keep
+provider parsing outside the financial engine and vendor datasets private. Public
+synthetic examples let contributors reproduce bugs without an account.
 
 Acceptance: the dataset is reproducible, timestamps support later execution,
 missing data fails clearly, and imported performance is never presented as actual

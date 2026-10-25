@@ -13,8 +13,8 @@ The included 48-period CSV is explicitly synthetic and is a software contract
 fixture, not historical market evidence. No genuine historical performance result
 has been produced by this delivery.
 
-An actual feed adapter is still needed once real ETF identities and an appropriate
-source are verified. Source access/licensing, point-in-time availability, the exact
+The [daily export adapter](PROVIDER_IMPORT.md) now supports operator-supplied EODHD
+files offline. Real source access/licensing, point-in-time availability, the exact
 share class and the meaning of adjusted returns must be checked. The original
 Public MCP decision remains unchanged; historical research data is a separate
 input, and Bitpanda remains the broker route.
@@ -27,7 +27,10 @@ For a monthly decision, the engine needs three different facts:
 2. `available_at`: when that observation was actually available to the strategy.
 3. `execution_at`: a later observation at which the hypothetical order is modeled.
 
-Availability must precede execution. A signal measured at month end is followed
+Availability must precede execution. Version 1 records declared timestamps;
+version 2 explicitly records an assumed 24-hour lag and retrospective adjusted-close
+proxy. Neither proves point-in-time availability merely by supplying a timestamp.
+A signal measured at month end is followed
 by an execution observation in the next calendar month, no more than seven days
 later. This is an input-quality bound, not a market-calendar implementation or a
 promise of an executable quote. A provider adapter must supply genuine timestamps

@@ -18,6 +18,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from .domain import SafetyError, canonical, digest, instant
+from .instruments import asset_uuid, resolve_etf, validate_isin
 
 ENDPOINT = "https://mcp.public.bitpanda.com"
 READ_TOOLS = frozenset(
@@ -188,6 +189,32 @@ async def check_account(credentials):
             "domain_mapping": "unverified_pending_account_contract_review",
             "trading": "unavailable",
         }
+
+
+async def inspect_asset(credentials, isin, expected_asset_id=None):
+    """One catalog read with explicit identity checks; no account data or ticker call."""
+    validate_isin(isin)
+    if expected_asset_id is not None:
+        asset_uuid(expected_asset_id)
+    async with connect(credentials) as client:
+        arguments = (
+            {"id": asset_uuid(expected_asset_id), "page_size": 1}
+            if expected_asset_id is not None
+            else {"isin": isin, "type": "equity_security", "group": "equity_etf", "page_size": 100}
+        )
+        payload = await client.call("list_assets", arguments)
+        identity = resolve_etf(payload, isin, expected_asset_id)
+        evidence = {
+            "version": 1,
+            "source": ENDPOINT,
+            "retrieved_at": datetime.now(UTC).isoformat(),
+            "catalog_hash": digest(client.catalog),
+            "identity": identity,
+            "purpose": "catalog_identity_only",
+            "account_eligibility": "unverified",
+            "trading": "unavailable",
+        }
+        return {**evidence, "evidence_id": digest(evidence)}
 
 
 def credentials_from_environment():

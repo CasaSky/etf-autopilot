@@ -40,6 +40,33 @@ balances, holdings or the key. A protocol read is not verification of real ETF
 identity, complete response mapping or account eligibility. These remain integration
 work until checked against the actual account and provider contracts.
 
+## Verify an instrument identity
+
+The resolver checks ISIN format/check digit, `equity_security` / `equity_etf` and
+an optional expected UUID. Legacy records cannot substitute for real securities;
+ambiguous real matches require a UUID. Truncated pages and duplicate IDs fail closed.
+An ISIN checksum detects errors; it does not authenticate issuance or fund eligibility.
+
+An offline synthetic check needs no broker dependencies:
+
+```sh
+etf-autopilot asset-verify fixtures/asset_catalog.json --isin ZZ0000000016
+```
+
+For a real read after choosing an ISIN and reviewing its listing:
+
+```sh
+etf-autopilot broker-asset --isin YOUR_ISIN --asset-id REVIEWED_UUID \
+  --expires-at YOUR_ACTUAL_UTC_EXPIRY_TIMESTAMP --out var/asset-identity.json
+```
+
+The same hidden prompt/environment injection is used. One catalog request saves
+immutable evidence with retrieval time, catalog hash and a content-derived ID.
+It reads no holdings/ticker and requests no quote/order. Omit `--asset-id` for an
+initial ISIN lookup; multiple matches are rejected. Use a new output filename for
+a new observation. Catalog active flags do not establish account permission or
+price availability. Identity snapshots never add funds to the strategy automatically.
+
 ## Boundaries
 
 The allowlist contains asset/currency discovery, ticker, holdings, portfolio

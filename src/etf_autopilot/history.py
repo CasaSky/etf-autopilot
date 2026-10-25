@@ -31,6 +31,13 @@ ASSUMPTIONS = {
     "fx": "already_in_eur",
     "cash_return": "zero",
 }
+ADJUSTED_ASSUMPTIONS = {**ASSUMPTIONS, "distributions": "vendor_dividend_adjustment_proxy"}
+EODHD_POLICY = {
+    "adapter": "eodhd_daily_v1",
+    "availability": "assumed_24h_after_utc_day_end",
+    "execution": "later_daily_close_in_following_month",
+    "adjustments": "retrospective_split_and_dividend_proxy",
+}
 MAX_IMPORT_BYTES = 5_000_000
 MAX_PERIODS = 1200
 
@@ -56,13 +63,19 @@ def validate_manifest(manifest):
         "instruments",
         "assumptions",
     }
-    if not isinstance(manifest, dict) or set(manifest) != required or manifest["version"] != 1:
+    if not isinstance(manifest, dict) or type(manifest.get("version")) is not int:
+        raise SafetyError("unsupported_history_manifest")
+    version = manifest["version"]
+    if version not in {1, 2} or set(manifest) != (
+        required | {"provenance"} if version == 2 else required
+    ):
         raise SafetyError("unsupported_history_manifest")
     if manifest["origin"] not in {"synthetic_fixture", "declared_historical"}:
         raise SafetyError("history_origin_required")
-    if manifest["price_basis"] != "unitized_total_return" or manifest["currency"] != "EUR":
+    basis = "unitized_total_return" if version == 1 else "unitized_adjusted_close_proxy"
+    if manifest["price_basis"] != basis or manifest["currency"] != "EUR":
         raise SafetyError("eur_total_return_indices_required")
-    if manifest["assumptions"] != ASSUMPTIONS:
+    if manifest["assumptions"] != (ASSUMPTIONS if version == 1 else ADJUSTED_ASSUMPTIONS):
         raise SafetyError("unsupported_history_assumptions")
     if not isinstance(manifest["provider"], str) or not 1 <= len(manifest["provider"]) <= 160:
         raise SafetyError("history_provider_required")
@@ -84,7 +97,14 @@ def validate_manifest(manifest):
     for asset_id, item in instruments.items():
         if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,47}", asset_id):
             raise SafetyError("invalid_history_asset_id")
-        if set(item) != {"label", "isin", "class", "type", "ucits", "currency"}:
+        if not isinstance(item, dict) or set(item) != {
+            "label",
+            "isin",
+            "class",
+            "type",
+            "ucits",
+            "currency",
+        }:
             raise SafetyError("unsupported_history_instrument")
         if item["type"] != "equity_security" or item["ucits"] is not True:
             raise SafetyError("declared_ucits_equity_security_required")
@@ -103,6 +123,51 @@ def validate_manifest(manifest):
         isins.add(item["isin"])
     if classes != {"equity", "bond"} or len(isins) != 2:
         raise SafetyError("distinct_equity_and_bond_instruments_required")
+    if version == 2:
+        provenance = manifest["provenance"]
+        if (
+            not isinstance(provenance, dict)
+            or set(provenance) != set(EODHD_POLICY) | {"usage_rights", "sources"}
+            or any(provenance[key] != value for key, value in EODHD_POLICY.items())
+            or provenance["usage_rights"]
+            != (
+                "synthetic_fixture"
+                if manifest["origin"] == "synthetic_fixture"
+                else "operator_confirmed_private_analysis"
+            )
+            or not isinstance(provenance["sources"], dict)
+            or set(provenance["sources"]) != set(instruments)
+        ):
+            raise SafetyError("unsupported_provider_provenance")
+        for source in provenance["sources"].values():
+            if not isinstance(source, dict) or set(source) != {
+                "symbol",
+                "raw_sha256",
+                "binding_sha256",
+                "binding_evidence_url",
+            }:
+                raise SafetyError("unsupported_provider_source")
+            if not isinstance(source["symbol"], str) or not re.fullmatch(
+                r"[A-Z0-9_-]{1,32}\.[A-Z]{2,12}", source["symbol"]
+            ):
+                raise SafetyError("invalid_provider_symbol")
+            if any(
+                not isinstance(source[key], str) or not re.fullmatch(r"[0-9a-f]{64}", source[key])
+                for key in ("raw_sha256", "binding_sha256")
+            ):
+                raise SafetyError("invalid_provider_source_hash")
+            if not isinstance(source["binding_evidence_url"], str):
+                raise SafetyError("public_binding_evidence_url_required")
+            source_url = urlparse(source["binding_evidence_url"])
+            if (
+                source_url.scheme != "https"
+                or not source_url.hostname
+                or source_url.username
+                or source_url.password
+                or source_url.query
+                or source_url.fragment
+            ):
+                raise SafetyError("public_binding_evidence_url_required")
 
 
 def _rows_from_csv(raw, manifest):
@@ -244,6 +309,9 @@ def dataset_receipt(dataset):
         "last_signal_period": rows[-1]["period"],
         "verification": "provider_declarations_not_independently_verified",
         "broker_mapping": "unverified",
+        "data_availability": dataset["manifest"]
+        .get("provenance", {})
+        .get("availability", "operator_declared_timestamps"),
     }
 
 
@@ -276,7 +344,7 @@ def config_for_dataset(base_config, dataset):
     result["data_contract"] = {
         "dataset_id": dataset["dataset_id"],
         "origin": dataset["manifest"]["origin"],
-        "price_basis": "unitized_total_return",
+        "price_basis": dataset["manifest"]["price_basis"],
         "broker_mapping": "unverified",
     }
     return result
