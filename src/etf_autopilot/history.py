@@ -68,6 +68,22 @@ def period_number(period):
     return year * 12 + month
 
 
+def validate_execution_dates(dates):
+    """Declared monthly comparison dates; never infer prices or nearest sessions."""
+    if not isinstance(dates, dict) or not 12 <= len(dates) <= MAX_PERIODS:
+        raise SafetyError("invalid_execution_calendar")
+    result = {}
+    for period, value in dates.items():
+        month, day = period_number(period), iso_day(value)
+        if period_number(day.strftime("%Y-%m")) != month + 1 or day.weekday() >= 5 or day.day > 7:
+            raise SafetyError("invalid_execution_calendar_date")
+        result[period] = day
+    months = sorted(period_number(period) for period in dates)
+    if months != list(range(months[0], months[-1] + 1)):
+        raise SafetyError("execution_calendar_month_gap")
+    return result
+
+
 def validate_manifest(manifest):
     required = {
         "version",
@@ -197,9 +213,18 @@ def validate_manifest(manifest):
 def validate_issuer_provenance(manifest):
     provenance = manifest["provenance"]
     policy = ISSUER_NAV_POLICY if manifest["version"] == 4 else ISSUER_POLICY
+    extra = set()
+    if (
+        manifest["version"] == 4
+        and isinstance(provenance, dict)
+        and "execution_dates" in provenance
+    ):
+        validate_execution_dates(provenance["execution_dates"])
+        policy = {**policy, "execution": "declared_later_observations_on_comparison_calendar"}
+        extra = {"execution_dates"}
     if (
         not isinstance(provenance, dict)
-        or set(provenance) != set(policy) | {"usage_rights", "sources", "fx"}
+        or set(provenance) != set(policy) | {"usage_rights", "sources", "fx"} | extra
         or any(provenance[key] != value for key, value in policy.items())
         or provenance["usage_rights"]
         != (
@@ -345,6 +370,12 @@ def _rows_from_csv(raw, manifest):
                 raise SafetyError("history_not_available_before_execution")
             if execution - signal > timedelta(days=7):
                 raise SafetyError("history_execution_gap_exceeds_seven_days")
+            calendar_dates = manifest.get("provenance", {}).get("execution_dates")
+            if calendar_dates is not None and (
+                period not in calendar_dates
+                or execution != instant(calendar_dates[period] + "T23:59:59Z")
+            ):
+                raise SafetyError("history_execution_calendar_mismatch")
             if execution > instant(manifest["retrieved_at"]):
                 raise SafetyError("history_execution_after_retrieval")
             values = [number(row[name]) for name in ("signal_index", "execution_index")]
@@ -370,6 +401,9 @@ def _rows_from_csv(raw, manifest):
     months = [period_number(row["period"]) for row in rows]
     if months != list(range(months[0], months[-1] + 1)):
         raise SafetyError("history_month_gap_no_imputation")
+    calendar_dates = manifest.get("provenance", {}).get("execution_dates")
+    if calendar_dates is not None and set(calendar_dates) != set(grouped):
+        raise SafetyError("history_execution_calendar_coverage_mismatch")
     assets = set(manifest["instruments"])
     for row in rows:
         if set(row["signals"]) != assets or set(row["executions"]) != assets:

@@ -256,21 +256,24 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
     if spec_path.stat().st_size > 100_000:
         raise SafetyError("provider_spec_size_limit")
     spec = load_json(spec_path)
+    fields = {
+        "version",
+        "origin",
+        "retrieved_at",
+        "signal_start",
+        "signal_end",
+        "instruments",
+        "bindings",
+        "usage_rights",
+    }
     if (
         not isinstance(spec, dict)
-        or set(spec)
-        != {
-            "version",
-            "origin",
-            "retrieved_at",
-            "signal_start",
-            "signal_end",
-            "instruments",
-            "bindings",
-            "usage_rights",
-        }
-        or type(spec["version"]) is not int
+        or type(spec.get("version")) is not int
         or spec["version"] not in {1, 2}
+        or (
+            set(spec) != fields
+            and not (spec["version"] == 2 and set(spec) == fields | {"execution_dates"})
+        )
     ):
         raise SafetyError("unsupported_issuer_import_spec")
     if not isinstance(spec["origin"], str) or spec["origin"] not in {
@@ -407,4 +410,14 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
         },
     }
     validate_manifest(manifest)
-    return write_import(manifest, monthly_csv(spec, series), output_directory)
+    if "execution_dates" in spec:
+        manifest["provenance"].update(
+            execution="declared_later_observations_on_comparison_calendar",
+            execution_dates=deepcopy(spec["execution_dates"]),
+        )
+        validate_manifest(manifest)
+    return write_import(
+        manifest,
+        monthly_csv(spec, series, execution_dates=spec.get("execution_dates")),
+        output_directory,
+    )

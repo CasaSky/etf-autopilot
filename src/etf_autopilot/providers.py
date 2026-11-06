@@ -23,6 +23,7 @@ from .history import (
     _rows_from_csv,
     import_history,
     period_number,
+    validate_execution_dates,
     validate_manifest,
     write_immutable_json,
 )
@@ -186,11 +187,16 @@ def _prepare(spec, paths):
     return manifest, raw_csv
 
 
-def monthly_csv(spec, series):
+def monthly_csv(spec, series, *, execution_dates=None):
     """Convert aligned dated research observations; never fill missing bars."""
     start, end = period_number(spec["signal_start"]), period_number(spec["signal_end"])
     if not 12 <= end - start + 1 <= 1200:
         raise SafetyError("provider_requires_12_to_1200_signal_months")
+    declared = validate_execution_dates(execution_dates) if execution_dates is not None else None
+    if declared is not None and {period_number(period) for period in declared} != set(
+        range(start, end + 1)
+    ):
+        raise SafetyError("execution_calendar_coverage_mismatch")
     first = date(*_month(start), 1)
     last = date(*_month(end + 1), 7)
     calendars = [{day for day in bars if first <= day <= last} for bars in series.values()]
@@ -223,6 +229,10 @@ def monthly_csv(spec, series):
             ),
             None,
         )
+        if declared is not None:
+            execution = declared[f"{year:04d}-{month_number:02d}"]
+            if execution not in dates or _end_of_day(execution) <= available:
+                raise SafetyError("declared_execution_observation_missing_or_unavailable")
         if execution is None:
             raise SafetyError("missing_later_provider_execution_bar")
         for asset, bars in series.items():

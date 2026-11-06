@@ -151,6 +151,22 @@ same policies as the growth importer. Every historical protocol must be register
 against the resulting data/config/code fingerprints before evaluation. Neither a
 new format nor a corrected split makes an already examined period fresh again.
 
+## Aligning candidate comparisons
+
+Two issuer pairs can have different first eligible observations after month end.
+Compare their timestamp sequences before computing results. Version-2 specs can
+declare an `execution_dates` object mapping **every signal month** to an exact
+date in the following month, for example `"2022-12": "2023-01-03"`. Freeze the
+calendar before inspecting performance and apply it identically to each candidate.
+
+Every declared date must have a genuine joint fund/FX observation, occur after the
+assumed availability time and satisfy the existing seven-day bound. A missing date
+fails; there is no nearest-date replacement or price interpolation. Signals retain
+their completed-month rule and still need matching timestamps across candidates.
+The manifest records the complete calendar, and dataset validation checks each
+execution against it. Preserve prior studies: a calendar correction changes the
+dataset and requires a new registered protocol, even when investment rules match.
+
 Use the dataset only through [registered research evaluation](DATA_EVALUATION.md).
 Its proxy quantities cannot be sent to a broker or used by the forward paper
 engine. Reports retain reference-FX, retrospective-series and calendar limitations;
