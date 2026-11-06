@@ -14,8 +14,10 @@ from pathlib import Path
 
 from .domain import ZERO, SafetyError, digest, instant, money, number, validate_config
 from .engine import ACCOUNTS, account_operations, execute_paper_plans, mark
+from .forward_selection import reserve_choice, verify_choice
 from .observations import validate_observations
 from .paper import equity, new_account, reconcile
+from .selection import SYSTEM, decision_context, validate_provider_options
 from .strategy import allocation, plan_with_limits
 
 MODE = "forward_research_paper"
@@ -24,6 +26,8 @@ MODE = "forward_research_paper"
 def trial_engine_fingerprint():
     names = (
         "forward.py",
+        "forward_selection.py",
+        "selection.py",
         "engine.py",
         "domain.py",
         "paper.py",
@@ -171,6 +175,8 @@ def _execute(state, pending, row, data, now, result, fault):
     if digest(plan) != pending["plan_hash"] or plan["config_hash"] != state["config_hash"]:
         raise SafetyError("forward_committed_plan_changed")
     config = state["config"]
+    selected = verify_choice(pending, config)
+    targets = {**plan["targets"], "strategy": plan["choices"][selected]}
     plans = {}
     for name, account in state["accounts"].items():
         reconcile(account, config["starting_cash"])
@@ -181,7 +187,7 @@ def _execute(state, pending, row, data, now, result, fault):
         if 1 - nav / peak > number(config["risk"]["max_drawdown"]):
             raise SafetyError("drawdown_limit_exceeded")
         checked = plan_with_limits(
-            account, {"prices": row["values"]}, plan["targets"][name], config, row["date"]
+            account, {"prices": row["values"]}, targets[name], config, row["date"]
         )
         plans[name] = checked["orders"]
         if checked["constraints"]:
@@ -207,7 +213,9 @@ def _execute(state, pending, row, data, now, result, fault):
     result.update(status="executed", decision_id=pending["id"], modeled_value_date=row["date"])
 
 
-def run_forward_cycle(store, base_config, data, *, now=None, operating_cost_eur="0.01", fault=None):
+def run_forward_cycle(
+    store, base_config, data, *, now=None, operating_cost_eur="0.01", fault=None, selection=None
+):
     """One finite deterministic cycle. Injected clocks/faults are for fixtures only."""
     validate_config(base_config)
     if "data_contract" in base_config:
@@ -222,8 +230,19 @@ def run_forward_cycle(store, base_config, data, *, now=None, operating_cost_eur=
         raise SafetyError("negative_operating_cost")
     if fault not in {None, "unknown", "partial", "expired_quote", "unresolved"}:
         raise SafetyError("unsupported_paper_fault")
+    if selection is not None:
+        if not isinstance(selection, dict) or set(selection) != {
+            "provider_name",
+            "reserved_cost_eur",
+        }:
+            raise SafetyError("invalid_forward_selection_options")
+        validate_provider_options(True, selection["provider_name"], selection["reserved_cost_eur"])
     fingerprint = digest(
-        {"observation_id": data["observation_id"], "operating_cost_eur": str(cost)}
+        {
+            "observation_id": data["observation_id"],
+            "operating_cost_eur": str(cost),
+            "selection": selection,
+        }
     )
 
     def transition(existing):
@@ -277,7 +296,8 @@ def run_forward_cycle(store, base_config, data, *, now=None, operating_cost_eur=
         pending = state["decisions"].get(state["pending"])
         finished = False
         execution = None
-        if pending and not state["halt"]:
+        if pending and pending["status"] == "ready" and not state["halt"]:
+            committed_at = max(instant(pending["plan"]["at"]), instant(pending["choice_at"]))
             if now - instant(pending["plan"]["at"]) > timedelta(days=7):
                 pending["status"] = "expired"
                 state["pending"] = None
@@ -288,8 +308,8 @@ def run_forward_cycle(store, base_config, data, *, now=None, operating_cost_eur=
                     (
                         row
                         for row in new_rows
-                        if row["date"] > pending["plan"]["at"][:10]
-                        and captured > instant(pending["plan"]["at"])
+                        if row["date"] > committed_at.date().isoformat()
+                        and captured > committed_at
                         and number(str((now - instant(row["date"] + "T00:00:00Z")).total_seconds()))
                         <= number(config["risk"]["max_data_age_hours"]) * 3600
                     ),
@@ -315,7 +335,14 @@ def run_forward_cycle(store, base_config, data, *, now=None, operating_cost_eur=
                     status="waiting_for_input", diagnosis="fresh_forward_observation_required"
                 )
             elif pending:
-                result.update(status="waiting_for_future_observation", decision_id=pending["id"])
+                result.update(
+                    status=(
+                        "awaiting_selection"
+                        if pending["status"] == "reserved"
+                        else "waiting_for_future_observation"
+                    ),
+                    decision_id=pending["id"],
+                )
             elif month in state["slots"]:
                 result["status"] = "monthly_decision_already_committed"
             else:
@@ -339,8 +366,15 @@ def run_forward_cycle(store, base_config, data, *, now=None, operating_cost_eur=
                         "capture_id": data["capture_id"],
                         "signal_date": signal_date,
                         "targets": targets,
+                        "choices": {
+                            name: allocation(market, config, name)
+                            for name in ("passive", "slow_trend")
+                        },
+                        "context": decision_context(config, {"market": market}),
+                        "system_hash": digest(SYSTEM),
+                        "selection": deepcopy(selection),
                         "strategy": config["strategy"],
-                        "source": "deterministic",
+                        "requested_provider": selection["provider_name"] if selection else None,
                     }
                     decision = {
                         "id": decision_id,
@@ -349,10 +383,23 @@ def run_forward_cycle(store, base_config, data, *, now=None, operating_cost_eur=
                         "plan_hash": digest(plan),
                     }
                     bucket["spend_eur"] = str(number(bucket["spend_eur"]) + cost)
+                    reserve_choice(decision, config, bucket, selection)
                     state["decisions"][decision_id] = decision
                     state["slots"][month] = decision_id
-                    state["pending"] = decision_id
-                    result.update(status="decision_committed", decision_id=decision_id)
+                    state["pending"] = (
+                        None if decision["status"] == "selection_blocked" else decision_id
+                    )
+                    result.update(
+                        status={
+                            "ready": "decision_committed",
+                            "reserved": "decision_reserved",
+                            "selection_blocked": "selection_blocked",
+                        }[decision["status"]],
+                        decision_id=decision_id,
+                    )
+                    for key in ("failure_code", "inference_skipped"):
+                        if key in decision:
+                            result[key] = decision[key]
                 except SafetyError as exc:
                     result.update(status="waiting_for_input", diagnosis=str(exc))
         state.update(
@@ -421,7 +468,15 @@ def forward_summary(state):
         }
     completed = any(row["status"] == "executed" for row in state["decisions"].values())
     interrupted = any(
-        row["status"] in {"execution_halted", "expired"} for row in state["decisions"].values()
+        row["status"]
+        in {
+            "execution_halted",
+            "expired",
+            "selection_blocked",
+            "selection_failed",
+            "selection_abandoned",
+        }
+        for row in state["decisions"].values()
     )
     return {
         "mode": MODE,
@@ -431,19 +486,35 @@ def forward_summary(state):
         "last_value_date": state["last_value_date"],
         "last_received_at": state["last_received_at"],
         "pending": state["pending"],
+        "decisions": [
+            {
+                "id": decision["id"],
+                "status": decision["status"],
+                "selected_strategy": decision.get("selected_strategy"),
+                "source": decision.get("source"),
+                "committed_at": decision["plan"]["at"],
+                "choice_at": decision.get("choice_at"),
+                "reserved_cost_eur": decision.get("reserved_cost_eur", "0"),
+                "failure_code": decision.get("failure_code"),
+            }
+            for decision in state["decisions"].values()
+        ],
         "halt": state["halt"],
         "accounts": accounts,
-        "model_calls": 0,
+        "model_calls": sum(
+            bucket["model_calls"] for bucket in state["operations"]["months"].values()
+        ),
         "comparable": completed
         and not interrupted
         and not state["halt"]
+        and not any(row["status"] == "reserved" for row in state["decisions"].values())
         and all(row["reconciliation"] == "matched" for row in accounts.values()),
         "execution_policy": "committed_targets_at_first_later_fresh_nav_within_seven_days",
         "limitations": [
             "NAV dates and receipt times do not verify intraday publication or broker execution.",
             "Taxes excluded; fees, spread, cash yield and costs are research assumptions.",
             "Daily drawdown sampling differs from the monthly study; halts retain holdings.",
-            "No AI contribution or automatic promotion; historical results stay separate.",
+            "Model choices measure paper hypotheses only; historical results stay separate.",
         ],
     }
 
@@ -480,7 +551,7 @@ def forward_markdown(state):
         "",
         f"Pending: {report['pending'] or 'none'}. Halt: {report['halt'] or 'none'}.",
         f"Comparable completed workflow: {report['comparable']}.",
-        f"Model calls: {report['model_calls']}.",
+        f"Reserved model attempts (including unknown/failed): {report['model_calls']}.",
         "",
     ]
     lines += ["- " + value for value in report["limitations"]]

@@ -14,7 +14,7 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
   explicit reference FX and calendar exclusions.
 - Finite public-issuer source capture with immutable bytes, receipt times, replay
   and offline derivation of daily research indices.
-- A causal research paper runner with committed targets and later NAV simulation.
+- A causal research paper runner with committed bounded choices and later NAV simulation.
 - Optional read-only Public MCP and bounded diagnosis library interfaces.
 - Bounded paper hypothesis choice, durable inference reservations and a scripted example.
 - A finite recurring cycle with runtime freshness and duplicate protection.
@@ -35,8 +35,9 @@ broker fills. Actual instrument/account compatibility is reported separately.
 
 ## Then: make the AI contribution measurable
 
-The [bounded choice interface](AI_DECISIONS.md) is implemented. Next, configure an
-explicit model/rate budget and collect forward paper evidence. Preserve passive
+The [bounded choice interface](AI_DECISIONS.md) also supports the
+[causal issuer-data runner](FORWARD_PAPER.md). Next, configure an explicit
+model/rate budget and collect forward paper evidence. Preserve passive
 and without-AI paths; scripted integration tests do not measure an AI advantage.
 
 Acceptance: invalid or unavailable model output cannot place an order or alter a

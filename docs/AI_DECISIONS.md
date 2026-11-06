@@ -120,7 +120,11 @@ are preserved and replayed under their original context. The explicit
 the one-call Bedrock integration check used fictional data and established protocol
 compatibility only. It supplies no evidence of added investment returns.
 
-This entry point currently accepts the synthetic forward-event contract. A real
-feed, account mapping, approved model configuration and alert destination remain
-required before unattended paper operation. The deployed health schedule remains
-disabled and does not call this action. No real investment schedule is enabled.
+`paper-cycle` accepts the synthetic forward-event contract. For captured daily
+issuer research data, use the separate [forward runner](FORWARD_PAPER.md). It
+reserves a bounded choice before a later NAV exists and saves the response before
+allowing a simulated fill. Neither entry point verifies broker execution.
+Account mapping, approved model configuration, secure runtime integration and an
+alert destination remain required before unattended paper operation. The deployed
+health schedule remains disabled and does not call these actions. No real
+investment schedule is enabled.

@@ -62,11 +62,11 @@ framework, server or cloud deployment is required to understand the core.
 |---|---|
 | Paper orders, accounting and recovery | Verified locally and in the AWS paper worker |
 | Historical import and chronological evaluation | Working; supplied examples are synthetic |
-| Forward research paper trial | Committed targets and later NAV simulation; deterministic offline example |
+| Forward research paper trial | Committed bounded choices and later NAV simulation; offline examples |
 | Bitpanda Public MCP | Read verified; typed ETF/ticker evidence; timestamped feed and portfolio mapping pending |
 | AI diagnosis | Optional library adapter; disabled by default |
 | AI allocation | Bounded paper choice implemented; scripted example, no measured AI advantage |
-| Recurring paper entry point | Fresh-input cycle implemented; verified feed and unattended setup pending |
+| Recurring paper entry point | Fresh-input cycles and issuer research inputs; unattended setup pending |
 | Recurring AWS investment operation | Not enabled; paper worker verified, health schedule disabled |
 | Live trading | Unavailable |
 

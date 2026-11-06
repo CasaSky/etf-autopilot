@@ -13,6 +13,34 @@ from .report import markdown, summary
 from .store import LocalStore
 
 
+def model_options(args):
+    from .selection import bedrock_provider
+
+    requested = args.model_id or args.allow_model_call or args.region or args.profile
+    if not requested and number(args.reserved_cost_eur) == 0:
+        return {}
+    if not (
+        args.model_id
+        and args.allow_model_call
+        and args.region
+        and number(args.reserved_cost_eur) > 0
+    ):
+        raise SafetyError("model_requires_opt_in_id_region_and_positive_cost_reserve")
+    return {
+        "provider": bedrock_provider(args.model_id, args.region, args.profile),
+        "provider_name": f"bedrock:{args.region}:{args.model_id}",
+        "reserved_cost_eur": args.reserved_cost_eur,
+    }
+
+
+def model_arguments(command):
+    command.add_argument("--model-id", help="Explicit Bedrock model or inference profile ID")
+    command.add_argument("--allow-model-call", action="store_true")
+    command.add_argument("--reserved-cost-eur", default="0")
+    command.add_argument("--region", help="Explicit AWS region for a paid model call")
+    command.add_argument("--profile", help="AWS SDK profile; never pass access keys")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="ETF Autopilot — paper only")
     parser.add_argument("--config", default="config/paper.json")
@@ -29,11 +57,7 @@ def main(argv=None):
     ):
         decision = commands.add_parser(name, help=help_text)
         decision.add_argument("event_file")
-        decision.add_argument("--model-id", help="Explicit Bedrock model or inference profile ID")
-        decision.add_argument("--allow-model-call", action="store_true")
-        decision.add_argument("--reserved-cost-eur", default="0")
-        decision.add_argument("--region", help="Explicit AWS region for a paid model call")
-        decision.add_argument("--profile", help="AWS SDK profile; never pass access keys")
+        model_arguments(decision)
     abandon = commands.add_parser(
         "allocation-abandon", help="Close an unknown inference without retrying or refunding it"
     )
@@ -107,6 +131,11 @@ def main(argv=None):
     )
     forward.add_argument("observations")
     forward.add_argument("--operating-cost", default="0.01")
+    model_arguments(forward)
+    forward_abandon = commands.add_parser(
+        "forward-choice-abandon", help="Close an unknown forward inference without retry or refund"
+    )
+    forward_abandon.add_argument("decision_id")
     forward_report = commands.add_parser("forward-report", help="Inspect a forward research trial")
     forward_report.add_argument("--json", action="store_true")
     commands.add_parser(
@@ -144,19 +173,40 @@ def main(argv=None):
             )
 
             store = LocalStore(args.state)
+            if args.command == "forward-choice-abandon":
+                from .forward_selection import abandon_forward_selection
+
+                print(json.dumps(abandon_forward_selection(store, args.decision_id), indent=2))
+                return 0
             if args.command == "forward-cycle":
                 from .observations import load_observations
 
-                result = run_forward_cycle(
+                options = model_options(args)
+                runner = run_forward_cycle
+                if options:
+                    from .forward_selection import run_forward_decision
+
+                    runner = run_forward_decision
+                result = runner(
                     store,
                     load_json(args.config),
                     load_observations(args.observations),
                     operating_cost_eur=args.operating_cost,
+                    **options,
                 )
                 print(json.dumps(result, indent=2))
                 return (
                     2
-                    if result["status"] in {"halted", "waiting_for_input", "decision_expired"}
+                    if result["status"]
+                    in {
+                        "halted",
+                        "waiting_for_input",
+                        "decision_expired",
+                        "selection_blocked",
+                        "awaiting_selection",
+                    }
+                    or result.get("selection_status")
+                    in {"selection_failed", "selection_abandoned", "reserved"}
                     else 0
                 )
             if args.command == "forward-reconcile":
@@ -356,23 +406,9 @@ def main(argv=None):
         if args.command in {"history-import", "evaluation-plan", "evaluation-register", "evaluate"}:
             return research_command(args, config)
         if args.command in {"paper-decision", "paper-cycle"}:
-            from .selection import bedrock_provider, run_decision
+            from .selection import run_decision
 
-            options = {}
-            model_options = args.model_id or args.allow_model_call or args.region or args.profile
-            if model_options or number(args.reserved_cost_eur) != 0:
-                if not (
-                    args.model_id
-                    and args.allow_model_call
-                    and args.region
-                    and number(args.reserved_cost_eur) > 0
-                ):
-                    raise SafetyError("model_requires_opt_in_id_region_and_positive_cost_reserve")
-                options = {
-                    "provider": bedrock_provider(args.model_id, args.region, args.profile),
-                    "provider_name": f"bedrock:{args.region}:{args.model_id}",
-                    "reserved_cost_eur": args.reserved_cost_eur,
-                }
+            options = model_options(args)
             runner = run_decision
             if args.command == "paper-cycle":
                 from .cycle import run_cycle

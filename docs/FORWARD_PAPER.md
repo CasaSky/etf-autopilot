@@ -4,14 +4,15 @@ This runner commits target weights before a later NAV observation exists in its
 input. It uses daily issuer/ECB **research index units**, with simulated fees and
 fills. These quantities are not broker shares or executable ETF quotes.
 
-The current runner is deterministic. The separate bounded AI choice interface
-still operates on the original paper contract; forward model integration is the
-next step. No model, AWS deployment or broker account is needed for this example.
+The runner supports deterministic decisions and a bounded AI choice between the
+same two fixed hypotheses. Paid calls are disabled by default. The examples need
+no model, AWS deployment or broker account.
 
 ## Try the complete offline workflow
 
 ```sh
 python3 -S examples/forward_demo.py
+python3 -S examples/forward_demo.py --scripted-choice
 ```
 
 It generates fictional source files, captures them through an injected fixture,
@@ -19,6 +20,9 @@ derives daily indices, waits for fresh input, commits a decision, rejects a
 same-date execution observation and finally simulates a later NAV fill. Repeating
 the command adds no orders, marks or operating charges. The report is saved to
 `var/forward-demo/report.md`. No real investment-performance evidence is produced.
+The second command uses fictional falling equity prices and a scripted response
+to exercise a different choice for the strategy account. Its report goes to
+`var/forward-choice-demo/report.md`. This is interface testing, not AI evidence.
 
 ```mermaid
 flowchart LR
@@ -49,6 +53,12 @@ observation and capture must satisfy the existing 36-hour freshness limit.
 Observation age is conservatively measured from the start of its UTC date;
 morning collection can qualify where a late or weekend input cannot. No limit is
 relaxed to make stale input work.
+
+When a model is used, its bounded response must also be saved before execution.
+The NAV date must be strictly later than **both** reservation and response dates,
+and its receipt must follow the saved response. Input received while a call is
+in progress cannot become a retrospective fill. The seven-day deadline still
+starts at the original decision reservation.
 
 The trial takes the first later observation that meets these gates. Both recording
 and receipt must remain within seven days of the decision. An expired decision
@@ -95,8 +105,48 @@ notional caps apply to that modeled research date. No network call occurs inside
 the state transaction, and no external broker execution is claimed.
 
 Routine operating cost is charged once when a decision is committed, not on replay.
-Strategy and without-AI share it; passive assumes zero application charges. Model
-calls remain zero in this runner. Budgets are estimates, not a cloud billing feed.
+Strategy and without-AI share it; passive assumes zero application charges. Only
+the strategy account pays the inference reserve. Budgets are estimates, not a
+cloud billing feed.
+
+## Optional bounded model choice
+
+The model receives anonymous equity/bond trend features from the completed signal
+month and the two fixed candidate allocations. It can return only `passive` or
+`slow_trend`. Assets, weights, risk limits and comparator behavior remain fixed.
+Strict JSON rejects extra keys, duplicate keys and unknown strategies. The model
+has no tools or broker access. Identical candidate allocations skip inference.
+
+A call requires an explicitly reviewed model/region, positive cost reserve,
+nonzero `operations.max_model_calls` and sufficient token/monthly budgets in a
+separate private config. The ordinary defaults still permit zero model calls.
+After that authorization, the opt-in command has this form:
+
+```sh
+etf-autopilot --config var/trial/config.json --state var/trial/paper.sqlite3 \
+  forward-cycle var/trial/daily-CAPTURE_ID.json \
+  --allow-model-call --model-id APPROVED_MODEL_ID --region APPROVED_REGION \
+  --profile APPROVED_PROFILE --reserved-cost-eur APPROVED_RESERVE
+```
+
+The transaction consumes the monthly decision slot and saves its call/cost
+reservation before creating the SDK client. One attempt runs outside the storage
+transaction, with no SDK retry. Replay never invokes a reserved call again. A
+timeout, invalid response or crash keeps its cost and month; there is no fallback
+that silently turns the failed AI comparison into a successful deterministic one.
+The report counts **reserved attempts**, including calls whose outcome is unknown.
+
+An unknown reservation remains pending until explicitly inspected and closed:
+
+```sh
+etf-autopilot --state var/trial/paper.sqlite3 \
+  forward-choice-abandon forward-decision:YYYY-MM
+```
+
+This closes the attempt without retrying, refunding or reopening its month.
+The response cannot overwrite an operator's abandonment. Replaying an observation
+with different provider/cost options is rejected; preserve its original options.
+An incomplete comparison stays flagged even when later months proceed.
 
 Unknown/partial/expired simulated outcomes halt further orders and preserve the
 original decision and month. Explicitly inspect and reconcile confirmed operations:

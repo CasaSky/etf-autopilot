@@ -23,14 +23,14 @@ def _unique_object(items):
     return result
 
 
-def _context(config, event):
+def decision_context(config, event):
     if {asset["class"] for asset in config["assets"].values()} != {"equity", "bond"}:
         raise SafetyError("allocation_universe_roles_required")
     market = event["market"]
     features = {}
     for asset, metadata in config["assets"].items():
         prices = [number(row["prices"][asset]) for row in market["history"]]
-        current = number(market["prices"][asset])
+        current = number(market.get("signal_prices", market["prices"])[asset])
         features[metadata["class"]] = {
             "trend_gap": str(current / (sum(prices) / len(prices)) - 1),
             "latest_month_change": str(current / prices[-1] - 1),
@@ -43,6 +43,20 @@ def _context(config, event):
         for strategy in sorted(STRATEGIES)
     }
     return {"features": features, "candidates": candidates, "scope": "paper_experiment_only"}
+
+
+def decode_choice(response, max_output_tokens):
+    if not isinstance(response, str) or len(response.encode()) > max_output_tokens:
+        raise SafetyError("model_output_budget_exhausted")
+    proposal = json.loads(response, object_pairs_hook=_unique_object)
+    if (
+        not isinstance(proposal, dict)
+        or set(proposal) != {"strategy"}
+        or not isinstance(proposal["strategy"], str)
+        or proposal["strategy"] not in STRATEGIES
+    ):
+        raise SafetyError("invalid_allocation_choice")
+    return proposal
 
 
 def _context_digest(config, event, context, source):
@@ -90,7 +104,7 @@ def select_strategy(
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         raise SafetyError("invalid_market_input") from exc
     amount = validate_provider_options(provider, provider_name, reserved_cost_eur)
-    context = _context(config, event)
+    context = decision_context(config, event)
     prompt = canonical(context)
     event_hash, config_hash = digest(event), digest(config)
     source = provider_name if provider is not None else "deterministic"
@@ -179,16 +193,7 @@ def select_strategy(
         return receipt
     try:
         response = provider(prompt, limits["max_output_tokens"])
-        if not isinstance(response, str) or len(response.encode()) > limits["max_output_tokens"]:
-            raise SafetyError("model_output_budget_exhausted")
-        proposal = json.loads(response, object_pairs_hook=_unique_object)
-        if (
-            not isinstance(proposal, dict)
-            or set(proposal) != {"strategy"}
-            or not isinstance(proposal["strategy"], str)
-            or proposal["strategy"] not in STRATEGIES
-        ):
-            raise SafetyError("invalid_allocation_choice")
+        proposal = decode_choice(response, limits["max_output_tokens"])
         receipt.update(
             status="ready", strategy=proposal["strategy"], response_hash=digest(proposal)
         )
@@ -239,7 +244,7 @@ def selected_strategy(state, config, event, allocation_id):
         or row["strategy"] not in STRATEGIES
     ):
         raise SafetyError("allocation_not_ready_no_orders")
-    context = _context(config, event)
+    context = decision_context(config, event)
     if row.get("context") != context or row.get("context_hash") != _context_digest(
         config, event, context, row.get("source")
     ):
