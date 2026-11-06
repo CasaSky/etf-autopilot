@@ -11,6 +11,7 @@ examples are synthetic and the default runtime is paper-only.
 | Convert daily provider exports privately | [Daily export adapter](PROVIDER_IMPORT.md) |
 | Convert free issuer fund-growth exports | [Issuer and ECB adapter](ISSUER_IMPORT.md) |
 | Try bounded choices and finite recurring cycles | [Paper decisions](AI_DECISIONS.md) |
+| Commit research targets before a later NAV arrives | [Forward paper research](FORWARD_PAPER.md) |
 | Recover a stopped or uncertain paper run | [Operations](OPERATIONS.md) |
 | Try an explicitly read-only account connection | [Broker integration](BROKER.md) |
 | Review the optional AWS paper worker | [Deployment](../deploy/README.md) |
@@ -28,6 +29,8 @@ The core source is intentionally small and direct:
 - `history.py` / `evaluation.py`: imported data, fixed protocols and exposure tracking.
 - `instruments.py` / `providers.py`: broker identity checks and offline daily-export conversion.
 - `issuer.py`: offline fund-growth exports, explicit reference FX and shared-date provenance.
+- `capture.py` / `observations.py`: immutable source receipts and daily research indices.
+- `forward.py`: committed targets, later observations and a separate paper research ledger.
 - `market.py`: typed ticker evidence that distinguishes retrieval time from price time.
 - `operations.py` / `bitpanda.py`: optional diagnosis and read-only broker boundaries.
 

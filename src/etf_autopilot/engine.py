@@ -74,6 +74,54 @@ def account_operations(state, name):
     return total
 
 
+def execute_paper_plans(state, config, event, plans, result, *, fault=None):
+    """Execute already checked simulated plans; no external broker/network calls.
+
+    A research caller can retain a modeled value date separately from the actual
+    recording timestamp. Ordinary fixture events have no such field.
+    """
+    day = event.get("modeled_execution_date", instant(event["at"]).date().isoformat())
+    for name, account in state["accounts"].items():
+        for index, order in enumerate(plans[name]):
+            intent_id = f"{name}:{event['id']}:{index}:{order['asset']}:{order['side']}"
+            intent = {**order, "id": intent_id, "status": "SUBMITTING"}
+            account["intents"][intent_id] = intent
+            quote = make_quote(
+                account,
+                intent,
+                event["market"]["prices"][order["asset"]],
+                config["execution"],
+                event["at"],
+            )
+            outcome = fault if name == "strategy" and index == 0 else None
+            accepted_at = event["at"]
+            if outcome == "expired_quote":
+                accepted_at = (instant(quote["expires_at"]) + timedelta(seconds=1)).isoformat()
+            try:
+                if outcome == "unresolved":
+                    raise SafetyError("broker_outcome_unknown")
+                fill = accept_paper_quote(account, quote, accepted_at, outcome)
+                if "modeled_execution_date" in event:
+                    fill["modeled_value_date"] = day
+                record_fill(account, fill)
+                intent["status"] = fill["status"]
+                result["orders"] += 1
+                volume = account["daily_volume"].setdefault(day, {"buy": "0", "sell": "0"})
+                side = order["side"]
+                volume[side] = str(number(volume[side]) + number(fill["notional"]))
+                if fill["status"] == "PARTIAL":
+                    raise SafetyError("partial_fill_reconcile_required")
+            except SafetyError as exc:
+                operation = account["broker"]["operations"].get(intent_id)
+                if operation is not None and "modeled_execution_date" in event:
+                    operation["modeled_value_date"] = day
+                if str(exc) == "broker_outcome_unknown":
+                    intent["status"] = "UNKNOWN"
+                elif str(exc) == "quote_expired":
+                    intent["status"] = "REJECTED"
+                raise
+
+
 def run_event(store, config, event, *, fault=None, allocation_id=None):
     """fault is test-only paper simulation; never read from an event or model output."""
     validate_config(config)
@@ -158,44 +206,7 @@ def run_event(store, config, event, *, fault=None, allocation_id=None):
                 # Reserve the month before any submission, including uncertain/partial outcomes.
                 state["slots"][month] = event["id"]
                 state["last_at"] = event["at"]
-                for name, account in state["accounts"].items():
-                    for index, order in enumerate(plans[name]):
-                        intent_id = f"{name}:{event['id']}:{index}:{order['asset']}:{order['side']}"
-                        intent = {**order, "id": intent_id, "status": "SUBMITTING"}
-                        account["intents"][intent_id] = intent
-                        quote = make_quote(
-                            account,
-                            intent,
-                            event["market"]["prices"][order["asset"]],
-                            config["execution"],
-                            event["at"],
-                        )
-                        outcome = fault if name == "strategy" and index == 0 else None
-                        accepted_at = event["at"]
-                        if outcome == "expired_quote":
-                            accepted_at = (
-                                instant(quote["expires_at"]) + timedelta(seconds=1)
-                            ).isoformat()
-                        try:
-                            if outcome == "unresolved":
-                                raise SafetyError("broker_outcome_unknown")
-                            fill = accept_paper_quote(account, quote, accepted_at, outcome)
-                            record_fill(account, fill)
-                            intent["status"] = fill["status"]
-                            result["orders"] += 1
-                            volume = account["daily_volume"].setdefault(
-                                day, {"buy": "0", "sell": "0"}
-                            )
-                            side = order["side"]
-                            volume[side] = str(number(volume[side]) + number(fill["notional"]))
-                            if fill["status"] == "PARTIAL":
-                                raise SafetyError("partial_fill_reconcile_required")
-                        except SafetyError as exc:
-                            if str(exc) == "broker_outcome_unknown":
-                                intent["status"] = "UNKNOWN"
-                            elif str(exc) == "quote_expired":
-                                intent["status"] = "REJECTED"
-                            raise
+                execute_paper_plans(state, config, event, plans, result, fault=fault)
                 for account in state["accounts"].values():
                     reconcile(account, config["starting_cash"])
         except SafetyError as exc:

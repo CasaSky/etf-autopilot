@@ -16,7 +16,7 @@ from .store import LocalStore
 def main(argv=None):
     parser = argparse.ArgumentParser(description="ETF Autopilot — paper only")
     parser.add_argument("--config", default="config/paper.json")
-    parser.add_argument("--state", default="var/paper.sqlite3")
+    parser.add_argument("--state", help="State file; forward research uses its own default")
     commands = parser.add_subparsers(dest="command", required=True)
     demo = commands.add_parser("demo", help="Replay deterministic synthetic monthly events")
     demo.add_argument("--fixture", default="fixtures/monthly_events.json")
@@ -102,6 +102,16 @@ def main(argv=None):
     observations.add_argument("plan")
     observations.add_argument("capture_directory")
     observations.add_argument("--out", required=True)
+    forward = commands.add_parser(
+        "forward-cycle", help="Commit research targets, then wait for a later observed NAV"
+    )
+    forward.add_argument("observations")
+    forward.add_argument("--operating-cost", default="0.01")
+    forward_report = commands.add_parser("forward-report", help="Inspect a forward research trial")
+    forward_report.add_argument("--json", action="store_true")
+    commands.add_parser(
+        "forward-reconcile", help="Reconcile confirmed research fills without retry"
+    )
     evaluation_plan = commands.add_parser(
         "evaluation-plan", help="Write a fixed evaluation protocol"
     )
@@ -121,7 +131,45 @@ def main(argv=None):
     )
     evaluate.add_argument("--out-dir", default="var/evaluations")
     args = parser.parse_args(argv)
+    args.state = args.state or (
+        "var/forward-paper.sqlite3" if args.command.startswith("forward-") else "var/paper.sqlite3"
+    )
     try:
+        if args.command.startswith("forward-"):
+            from .forward import (
+                forward_markdown,
+                forward_summary,
+                reconcile_forward,
+                run_forward_cycle,
+            )
+
+            store = LocalStore(args.state)
+            if args.command == "forward-cycle":
+                from .observations import load_observations
+
+                result = run_forward_cycle(
+                    store,
+                    load_json(args.config),
+                    load_observations(args.observations),
+                    operating_cost_eur=args.operating_cost,
+                )
+                print(json.dumps(result, indent=2))
+                return (
+                    2
+                    if result["status"] in {"halted", "waiting_for_input", "decision_expired"}
+                    else 0
+                )
+            if args.command == "forward-reconcile":
+                result = reconcile_forward(store)
+                print(json.dumps(result, indent=2))
+                return 0 if result["status"] == "matched" else 2
+            state = store.read()
+            print(
+                json.dumps(forward_summary(state), indent=2)
+                if args.json
+                else forward_markdown(state)
+            )
+            return 0
         if args.command == "capture-observations":
             from .observations import save_observations
 

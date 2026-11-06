@@ -62,6 +62,7 @@ framework, server or cloud deployment is required to understand the core.
 |---|---|
 | Paper orders, accounting and recovery | Verified locally and in the AWS paper worker |
 | Historical import and chronological evaluation | Working; supplied examples are synthetic |
+| Forward research paper trial | Committed targets and later NAV simulation; deterministic offline example |
 | Bitpanda Public MCP | Read verified; typed ETF/ticker evidence; timestamped feed and portfolio mapping pending |
 | AI diagnosis | Optional library adapter; disabled by default |
 | AI allocation | Bounded paper choice implemented; scripted example, no measured AI advantage |
@@ -77,6 +78,7 @@ framework, server or cloud deployment is required to understand the core.
 - [Provider import](docs/PROVIDER_IMPORT.md): convert daily exports with explicit timing assumptions.
 - [Free issuer exports](docs/ISSUER_IMPORT.md): import fund-growth files with explicit EUR conversion.
 - [Bounded decisions](docs/AI_DECISIONS.md): try the scripted choice workflow and understand recovery.
+- [Forward paper research](docs/FORWARD_PAPER.md): commit targets before simulating a later NAV fill.
 - [Roadmap](docs/ROADMAP.md): see the next useful pieces and starter contributions.
 - [Contributing](CONTRIBUTING.md): set up development and make a focused change.
 - [AWS deployment](deploy/README.md): reproduce the isolated paper worker with Terraform.

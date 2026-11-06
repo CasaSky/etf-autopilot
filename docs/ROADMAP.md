@@ -14,6 +14,7 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
   explicit reference FX and calendar exclusions.
 - Finite public-issuer source capture with immutable bytes, receipt times, replay
   and offline derivation of daily research indices.
+- A causal research paper runner with committed targets and later NAV simulation.
 - Optional read-only Public MCP and bounded diagnosis library interfaces.
 - Bounded paper hypothesis choice, durable inference reservations and a scripted example.
 - A finite recurring cycle with runtime freshness and duplicate protection.
