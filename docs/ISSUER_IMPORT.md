@@ -1,7 +1,8 @@
 # Free issuer export adapter
 
 `history-issuer` converts locally supplied iShares SpreadsheetML exports and the
-ECB's historical reference-rate XML into the monthly research contract. It makes
+observed State Street accumulating-NAV workbook format, with the ECB's historical
+reference-rate XML, into the monthly research contract. It makes
 no network request, needs no API key and creates no subscription. It does not
 select ETFs or change the investment rules.
 
@@ -15,6 +16,15 @@ The example creates 48 months of fictional fund/benchmark data and fictional FX
 under `var/issuer-demo/`. It runs with Python alone, including `python3 -S`.
 Its successful import proves the software contract, not investment performance.
 Repeating it preserves identical files.
+
+To exercise a fictional NAV workbook with a declared share split:
+
+```sh
+python3 -S examples/issuer_demo.py --equity-nav --output-dir var/nav-demo
+```
+
+Both examples are offline, require no additional packages, and retain the same
+financial strategy rules.
 
 ## Use supplied exports privately
 
@@ -92,6 +102,54 @@ hashes, reference FX, exclusions, normalization and timing policies. The parser
 hashes the entire original file but reads only its completed financial prefix;
 malformed financial XML fails and later holdings XML is not parsed or repaired.
 UTF-8, document size, row, date, value and entity constraints are enforced.
+
+## Accumulating NAV and share splits
+
+Import spec version 2 declares `source_format` for each binding:
+`ishares_growth_spreadsheetml_v1` or `ssga_accumulating_nav_xlsx_v1`. The existing
+version-1 spec keeps its original growth-only behavior and version-3 output.
+The NAV format currently supports the equity role, a single English `navhist`
+worksheet, and the observed date/NAV columns. It is not a general Excel importer.
+ISIN, exact name and native currency must match the supplied binding. Check the
+issuer's exact share-class documents for UCITS status and accumulation policy.
+
+A NAV binding also requires `reviewed_share_class_launch_date`,
+`income_treatment: accumulating`, and an explicit `corporate_actions` list (empty
+when none apply). Each split declaration contains:
+
+```json
+{
+  "ex_date": "2023-03-06",
+  "shares_after_per_before": "5",
+  "evidence_url": "https://example.invalid/fictional-split-notice"
+}
+```
+
+This is fictional. Use independently reviewed issuer notices for actual events;
+the importer records the declaration and does not fetch or authenticate its URL.
+A split changes the number of shares, not the holding's value. The adapter divides
+pre-split NAV by the declared factor, compounding multiple reviewed splits. It
+requires observations on the ex-date and shortly before it. A factor inconsistent
+with the raw boundary fails, including a second adjustment to an already adjusted
+series. Distributing funds are rejected: raw NAV alone would omit their payments.
+
+Adjacent adjusted NAV ratios outside 0.5–1.5 stop for review. This conservative
+input-quality guard neither infers corporate actions nor clips genuine returns;
+large market moves also require source review. It cannot establish that every
+corporate action was found. Keep the original workbook and reviewed notices.
+
+The reader checks compressed/expanded sizes, ZIP paths, sheet relationships, cell
+references, dates and ordering. It rejects formulas, entities, missing observations
+and external data relationships. Hyperlinks are ignored and never followed. Only
+the observed final blank row plus marketing-text cell is excluded; a partial
+financial row cannot be relabelled as a disclaimer. The entire source is hashed.
+
+Mixed NAV/growth imports produce version-4 manifests with per-source formats,
+reviewed class metadata, report date and split declarations. EUR conversion, joint
+dates, assumed publication lag, later execution proxy and normalization retain the
+same policies as the growth importer. Every historical protocol must be registered
+against the resulting data/config/code fingerprints before evaluation. Neither a
+new format nor a corrected split makes an already examined period fresh again.
 
 Use the dataset only through [registered research evaluation](DATA_EVALUATION.md).
 Its proxy quantities cannot be sent to a broker or used by the forward paper

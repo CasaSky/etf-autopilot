@@ -23,7 +23,7 @@ MAX_RESULT_BYTES = 5_000_000
 def engine_fingerprint():
     import hashlib
 
-    modules = ("domain.py", "history.py", "strategy.py", "paper.py", "evaluation.py")
+    modules = ("domain.py", "history.py", "nav.py", "strategy.py", "paper.py", "evaluation.py")
     return digest(
         {
             "modules": {
@@ -269,16 +269,16 @@ def evaluate_window(dataset, base_config, protocol, window_name):
                 "Retrospectively adjusted closes are vendor dividend/split proxies; "
                 "availability is an assumed 24-hour lag, not verified point-in-time history."
                 if dataset["manifest"]["version"] == 2
-                else "Issuer fund-growth proxies can be revised; availability uses an assumed "
+                else "Issuer fund-growth/NAV proxies can be revised; availability uses an assumed "
                 "24-hour lag, not verified point-in-time history."
-                if dataset["manifest"]["version"] == 3
+                if dataset["manifest"]["version"] >= 3
                 else "Indices assume reinvested distributions; investor taxes are excluded."
             ),
             (
                 "USD fund indices use same-date ECB reference FX, not executable FX quotes. "
                 "Dates must be shared by both funds and ECB; exclusions are recorded, "
                 "no imputation."
-                if dataset["manifest"]["version"] == 3
+                if dataset["manifest"]["version"] >= 3
                 else "Currency/share-class bindings and the supplied trading calendar need "
                 "independent verification; no FX conversion or missing-bar interpolation "
                 "is performed."

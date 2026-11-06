@@ -21,7 +21,8 @@ input, and Bitpanda remains the broker route.
 
 The [issuer/ECB adapter](ISSUER_IMPORT.md) also supports freely accessible local
 fund-growth exports with explicit reference FX and shared-date handling. Its
-version-3 contract retains retrospective-series and assumed-availability limits;
+version-3 growth and version-4 NAV contracts retain retrospective-series and
+assumed-availability limits;
 the included data is fictional. A successful source import does not select funds.
 
 ## Why the data contract has several timestamps
@@ -33,8 +34,8 @@ For a monthly decision, the engine needs three different facts:
 3. `execution_at`: a later observation at which the hypothetical order is modeled.
 
 Availability must precede execution. Version 1 records declared timestamps;
-versions 2 and 3 explicitly record an assumed 24-hour lag and retrospective
-adjusted-close or issuer-growth proxies. None proves point-in-time availability
+versions 2–4 explicitly record an assumed 24-hour lag and retrospective
+adjusted-close, issuer-growth or accumulating-NAV proxies. None proves point-in-time availability
 merely by supplying a timestamp.
 A signal measured at month end is followed
 by an execution observation in the next calendar month, no more than seven days

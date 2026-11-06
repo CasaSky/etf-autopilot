@@ -10,7 +10,8 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
 - Deterministic allocation/policy checks, simulated execution and reconciliation.
 - Dataset import, chronological evaluation and persistent holdout-exposure tracking.
 - Typed broker ETF identity checks and an offline daily-export adapter with provenance.
-- A free issuer-growth export adapter with explicit reference FX and calendar exclusions.
+- Free issuer-growth and accumulating-NAV adapters with reviewed split adjustments,
+  explicit reference FX and calendar exclusions.
 - Optional read-only Public MCP and bounded diagnosis library interfaces.
 - Bounded paper hypothesis choice, durable inference reservations and a scripted example.
 - A finite recurring cycle with runtime freshness and duplicate protection.

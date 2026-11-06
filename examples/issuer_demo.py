@@ -5,7 +5,9 @@ import json
 import sys
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 SS = "{urn:schemas-microsoft-com:office:spreadsheet}"
@@ -33,9 +35,66 @@ def write_xml(path, root):
         path.write_bytes(raw)
 
 
+def write_nav(path, binding, days):
+    """Fictional accumulating NAV with one declared five-for-one split."""
+    from etf_autopilot.nav import NAV_COLUMNS, REL, R, S
+
+    book = ET.Element(S + "workbook")
+    ET.SubElement(
+        ET.SubElement(book, S + "sheets"), S + "sheet", {"name": "navhist", R + "id": "rId3"}
+    )
+    rels = ET.Element(REL + "Relationships")
+    ET.SubElement(
+        rels,
+        REL + "Relationship",
+        {"Id": "rId3", "Type": R[1:-1] + "/worksheet", "Target": "worksheets/sheet1.xml"},
+    )
+    worksheet = ET.Element(S + "worksheet")
+    table = ET.SubElement(worksheet, S + "sheetData")
+    rows = [
+        ["Fund Name:", binding["fund_name"]],
+        ["ISIN:", binding["isin"]],
+        ["Report Date:", "08-Jan-2026"],
+        ["NAV Currency:", "USD"],
+        [],
+        NAV_COLUMNS,
+    ]
+    for day in reversed(days):
+        month = (day.year - 2022) * 12 + day.month - 1
+        value = 100 + month
+        value = str(value) if day < date(2023, 3, 6) else str(Decimal(value) / 5)
+        rows.append([f"{day.day:02d}-{MONTHS[day.month - 1]}-{day.year}", value, "0", "0", "0"])
+    for index, values in enumerate(rows, 1):
+        row = ET.SubElement(table, S + "row", {"r": str(index)})
+        for column, value in zip("ABCDE", values, strict=False):
+            cell = ET.SubElement(row, S + "c", {"r": f"{column}{index}", "t": "inlineStr"})
+            ET.SubElement(ET.SubElement(cell, S + "is"), S + "t").text = value
+    # Fixed ZIP metadata makes repeat runs byte-identical.
+    from io import BytesIO
+    from zipfile import ZipInfo
+
+    output = BytesIO()
+    with ZipFile(output, "w", compression=ZIP_DEFLATED) as archive:
+        for name, root in {
+            "xl/workbook.xml": book,
+            "xl/_rels/workbook.xml.rels": rels,
+            "xl/worksheets/sheet1.xml": worksheet,
+        }.items():
+            info = ZipInfo(name, date_time=(2026, 1, 8, 0, 0, 0))
+            info.compress_type = ZIP_DEFLATED
+            archive.writestr(info, ET.tostring(root, encoding="utf-8", xml_declaration=True))
+    raw = output.getvalue()
+    if path.exists() and path.read_bytes() != raw:
+        raise RuntimeError("Different fixture already exists; use a new output directory")
+    path.write_bytes(raw)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "var/issuer-demo")
+    parser.add_argument(
+        "--equity-nav", action="store_true", help="Use fictional split-adjusted NAV"
+    )
     args = parser.parse_args()
     sys.path.insert(0, str(ROOT / "src"))
     from etf_autopilot.domain import load_json
@@ -100,10 +159,32 @@ def main():
         "bindings": bindings,
         "usage_rights": "synthetic_fixture",
     }
+    equity_path = directory / "equity.xls"
+    if args.equity_nav:
+        from etf_autopilot.nav import GROWTH_FORMAT, NAV_FORMAT
+
+        spec["version"] = 2
+        for item in bindings.values():
+            item["source_format"] = GROWTH_FORMAT
+        equity = next(asset for asset, item in instruments.items() if item["class"] == "equity")
+        bindings[equity].update(
+            source_format=NAV_FORMAT,
+            reviewed_share_class_launch_date="2022-01-03",
+            income_treatment="accumulating",
+            corporate_actions=[
+                {
+                    "ex_date": "2023-03-06",
+                    "shares_after_per_before": "5",
+                    "evidence_url": "https://example.invalid/fictional-split-notice",
+                }
+            ],
+        )
+        equity_path = directory / "equity.xlsx"
+        write_nav(equity_path, bindings[equity], days)
     write_immutable_json(directory / "spec.json", spec)
     dataset = import_issuer(
         directory / "spec.json",
-        directory / "equity.xls",
+        equity_path,
         directory / "bond.xls",
         directory / "fx.xml",
         directory / "converted",

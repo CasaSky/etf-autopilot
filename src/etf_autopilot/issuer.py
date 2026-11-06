@@ -9,8 +9,16 @@ from datetime import date
 from pathlib import Path
 
 from .domain import SafetyError, digest, instant, load_json, number
-from .history import ASSUMPTIONS, ECB_HISTORY_URL, ISSUER_POLICY, period_number, validate_manifest
+from .history import (
+    ASSUMPTIONS,
+    ECB_HISTORY_URL,
+    ISSUER_NAV_POLICY,
+    ISSUER_POLICY,
+    period_number,
+    validate_manifest,
+)
 from .instruments import validate_isin
+from .nav import GROWTH_FORMAT, NAV_FORMAT, iso_day, read_nav
 from .providers import _end_of_day, _month, monthly_csv, write_import
 
 SS = "{urn:schemas-microsoft-com:office:spreadsheet}"
@@ -262,7 +270,7 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
             "usage_rights",
         }
         or type(spec["version"]) is not int
-        or spec["version"] != 1
+        or spec["version"] not in {1, 2}
     ):
         raise SafetyError("unsupported_issuer_import_spec")
     if not isinstance(spec["origin"], str) or spec["origin"] not in {
@@ -293,15 +301,35 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
     for role, asset in roles.items():
         binding = bindings[asset]
         fields = {"isin", "fund_name", "native_currency", "evidence_url"}
+        source_format = GROWTH_FORMAT
+        if spec["version"] == 2:
+            source_format = binding.get("source_format") if isinstance(binding, dict) else None
+            if not isinstance(source_format, str) or source_format not in {
+                GROWTH_FORMAT,
+                NAV_FORMAT,
+            }:
+                raise SafetyError("unsupported_issuer_source_format")
+            fields = fields | {"source_format"}
+        if source_format == NAV_FORMAT:
+            fields = fields | {
+                "reviewed_share_class_launch_date",
+                "income_treatment",
+                "corporate_actions",
+            }
         if not isinstance(binding, dict) or set(binding) not in (
             fields,
             fields | {"reviewed_share_class_launch_date"},
         ):
             raise SafetyError("unsupported_issuer_binding")
-        data = read_issuer(
-            paths[role],
-            reviewed_share_class_launch_date=binding.get("reviewed_share_class_launch_date"),
-        )
+        if source_format == NAV_FORMAT:
+            data = read_nav(paths[role], binding)
+            if iso_day(data["report_date"]) > instant(spec["retrieved_at"]).date():
+                raise SafetyError("invalid_nav_report_date")
+        else:
+            data = read_issuer(
+                paths[role],
+                reviewed_share_class_launch_date=binding.get("reviewed_share_class_launch_date"),
+            )
         if any(binding[key] != data[key] for key in ("isin", "fund_name", "native_currency")) or (
             data["isin"] != instruments[asset].get("isin")
             or data["asset_class"] != {"equity": "Equity", "bond": "Fixed Income"}[role]
@@ -326,6 +354,12 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
         sources[asset].update(
             binding_sha256=digest(binding), binding_evidence_url=binding["evidence_url"]
         )
+        if spec["version"] == 2:
+            sources[asset]["source_format"] = source_format
+        if source_format == NAV_FORMAT:
+            sources[asset].update(
+                {key: data[key] for key in ("report_date", "income_treatment", "split_adjustments")}
+            )
         if "metadata_basis" in data:
             sources[asset].update(
                 {key: data[key] for key in ("metadata_basis", "reviewed_share_class_launch_date")}
@@ -344,17 +378,25 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
         base = converted[min(joint)]
         series[asset] = {day: value / base * 100 for day, value in converted.items()}
     manifest = {
-        "version": 3,
+        "version": 4 if spec["version"] == 2 else 3,
         "origin": spec["origin"],
-        "provider": "iShares issuer fund growth and ECB reference FX",
-        "source_url": "https://www.ishares.com/uk/individual/en/products",
+        "provider": (
+            "Issuer fund growth/accumulating NAV and ECB reference FX"
+            if spec["version"] == 2
+            else "iShares issuer fund growth and ECB reference FX"
+        ),
+        "source_url": (
+            bindings[roles["equity"]]["evidence_url"]
+            if spec["version"] == 2
+            else "https://www.ishares.com/uk/individual/en/products"
+        ),
         "retrieved_at": spec["retrieved_at"],
         "price_basis": "unitized_issuer_return_proxy",
         "currency": "EUR",
         "instruments": deepcopy(instruments),
         "assumptions": deepcopy(ASSUMPTIONS),
         "provenance": {
-            **ISSUER_POLICY,
+            **(ISSUER_NAV_POLICY if spec["version"] == 2 else ISSUER_POLICY),
             "usage_rights": spec["usage_rights"],
             "sources": sources,
             "fx": {

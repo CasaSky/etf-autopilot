@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .domain import SafetyError, canonical, digest, instant, load_json, number
+from .nav import GROWTH_FORMAT, NAV_FORMAT, iso_day, validate_splits
 
 COLUMNS = (
     "period",
@@ -47,6 +48,12 @@ ISSUER_POLICY = {
     "normalization": "first_joint_observation_100",
     "xml": "financial_prefix_only_full_file_hash",
 }
+ISSUER_NAV_POLICY = {
+    **ISSUER_POLICY,
+    "adapter": "issuer_growth_nav_ecb_v1",
+    "adjustments": "issuer_growth_or_accumulating_nav_with_reviewed_splits",
+    "xml": "declared_financial_prefix_or_nav_sheet_full_file_hash",
+}
 ECB_HISTORY_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml"
 MAX_IMPORT_BYTES = 5_000_000
 MAX_PERIODS = 1200
@@ -76,7 +83,7 @@ def validate_manifest(manifest):
     if not isinstance(manifest, dict) or type(manifest.get("version")) is not int:
         raise SafetyError("unsupported_history_manifest")
     version = manifest["version"]
-    if version not in {1, 2, 3} or set(manifest) != (
+    if version not in {1, 2, 3, 4} or set(manifest) != (
         required | {"provenance"} if version > 1 else required
     ):
         raise SafetyError("unsupported_history_manifest")
@@ -86,6 +93,7 @@ def validate_manifest(manifest):
         1: "unitized_total_return",
         2: "unitized_adjusted_close_proxy",
         3: "unitized_issuer_return_proxy",
+        4: "unitized_issuer_return_proxy",
     }[version]
     if manifest["price_basis"] != basis or manifest["currency"] != "EUR":
         raise SafetyError("eur_total_return_indices_required")
@@ -137,7 +145,7 @@ def validate_manifest(manifest):
         isins.add(item["isin"])
     if classes != {"equity", "bond"} or len(isins) != 2:
         raise SafetyError("distinct_equity_and_bond_instruments_required")
-    if version == 3:
+    if version >= 3:
         validate_issuer_provenance(manifest)
     if version == 2:
         provenance = manifest["provenance"]
@@ -188,10 +196,11 @@ def validate_manifest(manifest):
 
 def validate_issuer_provenance(manifest):
     provenance = manifest["provenance"]
+    policy = ISSUER_NAV_POLICY if manifest["version"] == 4 else ISSUER_POLICY
     if (
         not isinstance(provenance, dict)
-        or set(provenance) != set(ISSUER_POLICY) | {"usage_rights", "sources", "fx"}
-        or any(provenance[key] != value for key, value in ISSUER_POLICY.items())
+        or set(provenance) != set(policy) | {"usage_rights", "sources", "fx"}
+        or any(provenance[key] != value for key, value in policy.items())
         or provenance["usage_rights"]
         != (
             "synthetic_fixture"
@@ -224,11 +233,38 @@ def validate_issuer_provenance(manifest):
         "excluded_nonjoint_dates",
     }
     reviewed_fields = {"metadata_basis", "reviewed_share_class_launch_date"}
-    for source in sources.values():
-        if not isinstance(source, dict) or set(source) not in (fields, fields | reviewed_fields):
+    for asset, source in sources.items():
+        if not isinstance(source, dict):
+            raise SafetyError("unsupported_issuer_source")
+        expected = fields
+        nav = manifest["version"] == 4 and source.get("source_format") == NAV_FORMAT
+        if manifest["version"] == 4:
+            if not isinstance(source.get("source_format"), str) or source["source_format"] not in {
+                GROWTH_FORMAT,
+                NAV_FORMAT,
+            }:
+                raise SafetyError("unsupported_issuer_source_format")
+            expected = expected | {"source_format"}
+        if nav:
+            expected = (
+                expected
+                | reviewed_fields
+                | {"income_treatment", "report_date", "split_adjustments"}
+            )
+            if (
+                source.get("income_treatment") != "accumulating"
+                or manifest["instruments"][asset]["class"] != "equity"
+            ):
+                raise SafetyError("accumulating_equity_nav_required")
+        if set(source) not in (expected, expected | reviewed_fields):
             raise SafetyError("unsupported_issuer_source")
         if "metadata_basis" in source:
-            if source["metadata_basis"] != "reviewed_class_launch_and_matching_nav_base_currency":
+            basis = (
+                "reviewed_accumulating_nav_share_class"
+                if nav
+                else "reviewed_class_launch_and_matching_nav_base_currency"
+            )
+            if source["metadata_basis"] != basis:
                 raise SafetyError("unsupported_issuer_metadata_basis")
             value = source["reviewed_share_class_launch_date"]
             try:
@@ -240,6 +276,16 @@ def validate_issuer_provenance(manifest):
                 period_number(stamp.strftime("%Y-%m"))
             except ValueError:
                 raise SafetyError("invalid_reviewed_class_launch_date") from None
+        if nav:
+            report = iso_day(source["report_date"])
+            if not stamp <= report <= instant(manifest["retrieved_at"]).date():
+                raise SafetyError("invalid_nav_report_date")
+            validate_splits(source["split_adjustments"])
+            if any(
+                not stamp < iso_day(item["ex_date"]) <= report
+                for item in source["split_adjustments"]
+            ):
+                raise SafetyError("nav_split_outside_share_class_history")
         if (
             not isinstance(source["native_currency"], str)
             or source["native_currency"] not in {"EUR", "USD"}
