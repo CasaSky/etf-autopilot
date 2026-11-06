@@ -251,7 +251,12 @@ def read_ecb(path):
     return result, raw_hash
 
 
-def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory):
+def prepare_issuer(spec_path, equity_path, bond_path, ecb_path, *, observed_tail=False):
+    """Validate sources and return their spec, manifest and normalized daily series.
+
+    observed_tail retains later received dates beyond the monthly execution window.
+    It does not alter monthly coverage, timing assumptions or normalization basis.
+    """
     spec_path = Path(spec_path)
     if spec_path.stat().st_size > 100_000:
         raise SafetyError("provider_spec_size_limit")
@@ -343,7 +348,9 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
         if any(_end_of_day(day) > instant(spec["retrieved_at"]) for day in data["values"]):
             raise SafetyError("provider_bar_after_retrieval")
         series[asset] = data["values"]
-        calendars.append({day for day in series[asset] if first <= day <= last})
+        calendars.append(
+            {day for day in series[asset] if day >= first and (observed_tail or day <= last)}
+        )
         sources[asset] = {
             key: data[key]
             for key in (
@@ -416,6 +423,11 @@ def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory)
             execution_dates=deepcopy(spec["execution_dates"]),
         )
         validate_manifest(manifest)
+    return spec, manifest, series
+
+
+def import_issuer(spec_path, equity_path, bond_path, ecb_path, output_directory):
+    spec, manifest, series = prepare_issuer(spec_path, equity_path, bond_path, ecb_path)
     return write_import(
         manifest,
         monthly_csv(spec, series, execution_dates=spec.get("execution_dates")),

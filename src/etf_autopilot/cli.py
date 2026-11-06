@@ -95,6 +95,13 @@ def main(argv=None):
     )
     capture.add_argument("plan")
     capture.add_argument("--out-dir", required=True)
+    observations = commands.add_parser(
+        "capture-observations",
+        help="Derive daily research indices from a completed capture, offline",
+    )
+    observations.add_argument("plan")
+    observations.add_argument("capture_directory")
+    observations.add_argument("--out", required=True)
     evaluation_plan = commands.add_parser(
         "evaluation-plan", help="Write a fixed evaluation protocol"
     )
@@ -115,6 +122,29 @@ def main(argv=None):
     evaluate.add_argument("--out-dir", default="var/evaluations")
     args = parser.parse_args(argv)
     try:
+        if args.command == "capture-observations":
+            from .observations import save_observations
+
+            data = save_observations(args.plan, args.capture_directory, args.out)
+            print(
+                json.dumps(
+                    {
+                        "status": "daily_observations_saved",
+                        "path": str(Path(args.out).resolve()),
+                        "observation_id": data["observation_id"],
+                        "capture_id": data["capture_id"],
+                        "captured_at": data["captured_at"],
+                        "first_date": data["rows"][0]["date"],
+                        "last_date": data["rows"][-1]["date"],
+                        "observations": len(data["rows"]),
+                        "units": data["policy"]["units"],
+                        "execution_eligible": False,
+                        "model_calls": 0,
+                    },
+                    indent=2,
+                )
+            )
+            return 0
         if args.command == "capture-issuer":
             from .capture import capture_issuer
 

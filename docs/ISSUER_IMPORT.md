@@ -209,6 +209,21 @@ decision. Captures remain `execution_eligible: false`; a causal forward paper tr
 must freeze its decision before a later observed execution value. No historical
 model performance, live fill or unattended operation is inferred from a capture.
 
+To derive the daily joint fund/FX indices from a completed capture, offline:
+
+```sh
+etf-autopilot capture-observations var/issuer/capture-plan.json \
+  var/issuer/captures/UNIQUE_CAPTURE_ID --out var/issuer/daily-UNIQUE_CAPTURE_ID.json
+```
+
+This verifies the capture's original files before deriving a separate immutable
+artifact. It preserves the original receipt time and includes later received daily
+observations beyond the monthly execution window, through the latest joint date.
+The monthly dataset and its assumptions stay unchanged. Its policy explicitly
+identifies research index units, their normalization basis and unknown original
+publication times. Deriving indices does not authorize simulated orders: a forward
+trial still needs to commit a decision before a later observation is available.
+
 Use the dataset only through [registered research evaluation](DATA_EVALUATION.md).
 Its proxy quantities cannot be sent to a broker or used by the forward paper
 engine. Reports retain reference-FX, retrospective-series and calendar limitations;
