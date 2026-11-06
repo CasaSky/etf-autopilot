@@ -90,6 +90,11 @@ def main(argv=None):
     issuer.add_argument("bond_xml")
     issuer.add_argument("ecb_xml")
     issuer.add_argument("--out-dir", required=True)
+    capture = commands.add_parser(
+        "capture-issuer", help="Capture one reviewed public issuer pair and ECB, without a model"
+    )
+    capture.add_argument("plan")
+    capture.add_argument("--out-dir", required=True)
     evaluation_plan = commands.add_parser(
         "evaluation-plan", help="Write a fixed evaluation protocol"
     )
@@ -110,6 +115,27 @@ def main(argv=None):
     evaluate.add_argument("--out-dir", default="var/evaluations")
     args = parser.parse_args(argv)
     try:
+        if args.command == "capture-issuer":
+            from .capture import capture_issuer
+
+            receipt = capture_issuer(args.plan, args.out_dir)
+            print(
+                json.dumps(
+                    {
+                        "status": "issuer_capture_saved",
+                        "path": str(Path(args.out_dir).resolve()),
+                        "evidence_id": receipt["evidence_id"],
+                        "dataset_id": receipt["dataset_id"],
+                        "duplicate": receipt["duplicate"],
+                        "sources": len(receipt["sources"]),
+                        "timing_evidence": receipt["timing_evidence"],
+                        "execution_eligible": False,
+                        "model_calls": 0,
+                    },
+                    indent=2,
+                )
+            )
+            return 0
         if args.command == "market-verify":
             from .market import ticker_receipt
 

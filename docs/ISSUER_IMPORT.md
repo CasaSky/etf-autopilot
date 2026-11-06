@@ -167,6 +167,48 @@ The manifest records the complete calendar, and dataset validation checks each
 execution against it. Preserve prior studies: a calendar correction changes the
 dataset and requires a new registered protocol, even when investment rules match.
 
+## Capturing a new source vintage
+
+The finite `capture-issuer` command downloads two reviewed issuer exports and ECB
+outside the model, then applies this same import contract. It has no broker key,
+model call, schedule or trading interface. Try its offline fixture first:
+
+```sh
+python3 -S examples/capture_demo.py
+```
+
+For actual sources, prepare a private JSON plan with `version: 1`, the complete
+existing import object under `spec`, and `downloads` keyed by those same asset IDs.
+An iShares download uses `{"provider": "ishares", "portfolio_id": "YOUR_REVIEWED_PRODUCT_ID"}`;
+a supported State Street NAV download uses
+`{"provider": "ssga", "download_code": "YOUR_REVIEWED_DOWNLOAD_CODE"}`. Review the
+link on the exact issuer product page and its use conditions first. The command
+constructs fixed provider URLs from restricted IDs; it accepts no arbitrary URL,
+credentials, alternate host or automatic provider substitution.
+
+```sh
+etf-autopilot capture-issuer var/issuer/capture-plan.json \
+  --out-dir var/issuer/captures/UNIQUE_CAPTURE_ID
+```
+
+Each source gets one HTTPS attempt, without redirects, proxy credentials or retries.
+Byte limits and a 45-second network deadline bound the work; a socket read may
+take up to its remaining 15-second timeout. This is a local command, not a deployed
+Lambda data collector. Incomplete captures retain their evidence and require a new
+directory; they cannot serve as completed input.
+
+The output directory is private to its owner. It retains original bytes, per-source
+receipt times, hashes, the generated import spec and normalized research dataset.
+The spec's `retrieved_at` becomes the actual final receipt time. Repeating a
+completed capture verifies its files and returns the same evidence without network
+access. A changed plan or file fails instead of overwriting the earlier capture.
+
+Receipt time establishes when this process received data. It does **not** establish
+the original publication time or make past execution proxies available to an earlier
+decision. Captures remain `execution_eligible: false`; a causal forward paper trial
+must freeze its decision before a later observed execution value. No historical
+model performance, live fill or unattended operation is inferred from a capture.
+
 Use the dataset only through [registered research evaluation](DATA_EVALUATION.md).
 Its proxy quantities cannot be sent to a broker or used by the forward paper
 engine. Reports retain reference-FX, retrospective-series and calendar limitations;
