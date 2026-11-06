@@ -41,6 +41,17 @@ def model_arguments(command):
     command.add_argument("--profile", help="AWS SDK profile; never pass access keys")
 
 
+def forward_exit_code(result):
+    blocked = result["status"] in {
+        "halted",
+        "waiting_for_input",
+        "decision_expired",
+        "selection_blocked",
+        "awaiting_selection",
+    } or result.get("selection_status") in {"selection_failed", "selection_abandoned", "reserved"}
+    return 2 if blocked else 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="ETF Autopilot — paper only")
     parser.add_argument("--config", default="config/paper.json")
@@ -132,6 +143,13 @@ def main(argv=None):
     forward.add_argument("observations")
     forward.add_argument("--operating-cost", default="0.01")
     model_arguments(forward)
+    tick = commands.add_parser(
+        "forward-tick", help="Capture sources, run one paper cycle and retain a report"
+    )
+    tick.add_argument("plan")
+    tick.add_argument("--out-dir", required=True, help="Stable private directory for this attempt")
+    tick.add_argument("--operating-cost", default="0.01")
+    model_arguments(tick)
     forward_abandon = commands.add_parser(
         "forward-choice-abandon", help="Close an unknown forward inference without retry or refund"
     )
@@ -173,6 +191,31 @@ def main(argv=None):
             )
 
             store = LocalStore(args.state)
+            if args.command == "forward-tick":
+                from .forward_tick import run_forward_tick
+
+                receipt = run_forward_tick(
+                    store,
+                    load_json(args.config),
+                    args.plan,
+                    args.out_dir,
+                    operating_cost_eur=args.operating_cost,
+                    **model_options(args),
+                )
+                cycle = receipt["cycle"]
+                print(
+                    json.dumps(
+                        {
+                            "status": cycle["status"],
+                            "selection_status": cycle.get("selection_status"),
+                            "duplicate": receipt["duplicate"],
+                            "receipt_id": receipt["receipt_id"],
+                            "report": str(Path(args.out_dir).resolve() / "report.md"),
+                        },
+                        indent=2,
+                    )
+                )
+                return forward_exit_code(cycle)
             if args.command == "forward-choice-abandon":
                 from .forward_selection import abandon_forward_selection
 
@@ -195,20 +238,7 @@ def main(argv=None):
                     **options,
                 )
                 print(json.dumps(result, indent=2))
-                return (
-                    2
-                    if result["status"]
-                    in {
-                        "halted",
-                        "waiting_for_input",
-                        "decision_expired",
-                        "selection_blocked",
-                        "awaiting_selection",
-                    }
-                    or result.get("selection_status")
-                    in {"selection_failed", "selection_abandoned", "reserved"}
-                    else 0
-                )
+                return forward_exit_code(result)
             if args.command == "forward-reconcile":
                 result = reconcile_forward(store)
                 print(json.dumps(result, indent=2))

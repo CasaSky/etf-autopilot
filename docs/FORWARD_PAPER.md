@@ -90,6 +90,45 @@ described in [operations](OPERATIONS.md#order-sizing-within-fixed-limits).
 Changing configuration or financial code requires a reviewed new trial; it cannot
 silently change an existing account or erase its prior results.
 
+## One finite capture-to-report operation
+
+Try its capture, decision commitment, report and replay with fictional files:
+
+```sh
+python3 -S examples/capture_demo.py --forward-tick
+```
+
+It commits a target without inventing a future fill. The report is saved at
+`var/capture-demo/tick/report.md`, with zero network/model calls.
+
+Once the source plan and config have been reviewed, the combined command performs
+three bounded public downloads, verifies the daily artifact, runs one cycle and
+retains the report:
+
+```sh
+etf-autopilot --config var/trial/config.json --state var/trial/paper.sqlite3 \
+  forward-tick var/trial/capture-plan.json --out-dir var/trial/ticks/ATTEMPT_ID
+```
+
+`ATTEMPT_ID` is a stable identifier for this capture attempt, such as the intended
+UTC collection date. Repeating the same directory verifies its evidence and state
+without network reads, another model call, orders or charges. It returns that
+attempt's immutable report, which can precede the current account state. Use a new
+directory for the next intended observation. Do not rewrite a completed attempt.
+
+The same explicit model options described below can be supplied. Configuration,
+source plan, provider/cost options and code are bound before capture. A process
+interrupted after committing a decision resumes under its existing monthly slot;
+an unknown inference remains unknown. Failed or incomplete source downloads are
+retained and require a new attempt directory; they are never silently retried.
+Changed evidence, lost state and conflicting context fail closed.
+
+The output contains `context.json`, a source `capture/`, `observations.json`,
+`report.json`, `report.md` and the final hashed `tick.json` receipt. These are
+private artifacts. `waiting_for_input` still saves evidence/report and exits with
+code 2; operators must distinguish a stale-data wait from a successful decision.
+No command installs a scheduler, changes AWS permissions or uploads these files.
+
 ## Integrity, costs and recovery
 
 The trial retains a count and digest of its previously observed history. The next

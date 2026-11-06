@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "var/capture-demo")
+    parser.add_argument(
+        "--forward-tick", action="store_true", help="Also run a finite paper operation"
+    )
     args = parser.parse_args()
     source = args.output_dir / "fictional-sources"
     subprocess.run(
@@ -59,6 +62,32 @@ def main():
 
     repeated = capture_issuer(plan_path, directory, fetch=forbidden)
     assert repeated == {**result, "duplicate": True}
+    tick_info = {}
+    if args.forward_tick:
+        from etf_autopilot.forward_tick import run_forward_tick
+        from etf_autopilot.store import LocalStore
+
+        store = LocalStore(args.output_dir / "paper.sqlite3")
+        config = load_json(ROOT / "config/paper.json")
+        tick_path = args.output_dir / "tick"
+        tick = run_forward_tick(
+            store,
+            config,
+            plan_path,
+            tick_path,
+            fetch=fixture,
+            clock=lambda: datetime(2026, 1, 8, 9, tzinfo=UTC),
+        )
+        before = store.read()
+        replay = run_forward_tick(
+            store, config, plan_path, tick_path, fetch=forbidden, clock=forbidden
+        )
+        assert replay["duplicate"] and store.read() == before
+        assert tick["cycle"]["status"] == "decision_committed" and tick["cycle"]["orders"] == 0
+        tick_info = {
+            "paper_tick_status": tick["cycle"]["status"],
+            "paper_report": str((tick_path / "report.md").resolve()),
+        }
     print(
         json.dumps(
             {
@@ -71,6 +100,7 @@ def main():
                 "model_calls": 0,
                 "execution_eligible": False,
                 "investment_evidence": False,
+                **tick_info,
             },
             indent=2,
         )
