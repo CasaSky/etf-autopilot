@@ -14,7 +14,7 @@ flowchart LR
     Diagnosis --> Proposal[Reviewable diagnostic proposal]
 ```
 
-Python 3.13, Decimal, SQLite and the official MCP Python SDK were chosen after
+Python 3.14, Decimal, SQLite and the official MCP Python SDK were chosen after
 checking Public MCP coverage. The stable SDK 1.x line is version-locked and its
 Streamable HTTP initialization, discovery and tool invocation are exercised over
 mock HTTP. No MCP protocol or hosted broker server is rebuilt. A future SDK major

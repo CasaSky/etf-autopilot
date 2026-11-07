@@ -20,6 +20,8 @@ stays intact. Progress is judged by working behavior and reproducible evidence.
 - Bounded paper hypothesis choice, durable inference reservations and a scripted example.
 - A finite recurring cycle with runtime freshness and duplicate protection.
 - CI, Terraform safety tests and a verified AWS paper-worker deployment.
+- An opt-in cloud forward runner with immutable daily evidence, controller transfer,
+  bounded model IAM and failure alerts, verified with fixtures and mocked plans.
 
 ## Next: connect verified data
 
@@ -48,9 +50,10 @@ local development remain possible.
 
 ## Then: run the paper system repeatedly
 
-Connect the finite cycle to verified data/account reads, the approved schedule
-and the selected alert route. AWS/model choices and spend must be explicit. Exercise
-interruption and recovery before calling the operation unattended. Live execution
+The [cloud path](FORWARD_CLOUD.md) is implemented; installation-specific deployment,
+alert receipt, control transfer and runtime verification still precede activation.
+AWS/model choices and spend must be explicit. Exercise interruption and recovery
+before calling the operation unattended. Live execution
 requires its own authorization and external-outcome/disclosure work.
 
 ## Small starter contributions

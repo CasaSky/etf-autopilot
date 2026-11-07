@@ -57,7 +57,7 @@ resource "aws_s3_bucket_policy" "state" {
   bucket = aws_s3_bucket.state.id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Sid       = "RequireTLS"
         Effect    = "Deny"
@@ -74,7 +74,24 @@ resource "aws_s3_bucket_policy" "state" {
         Resource  = "${aws_s3_bucket.state.arn}/paper/state.json"
         Condition = { Null = { "s3:if-match" = "true", "s3:if-none-match" = "true" } }
       }
-    ]
+      ], var.enable_forward_runtime ? [
+      {
+        Sid       = "RequireConditionalForwardStateWrites"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.state.arn}/paper/forward/state.json"
+        Condition = { Null = { "s3:if-match" = "true", "s3:if-none-match" = "true" } }
+      },
+      {
+        Sid       = "KeepForwardArtifactsImmutable"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.state.arn}/paper/forward/ticks/*"
+        Condition = { Null = { "s3:if-none-match" = "true" } }
+      }
+    ] : [])
   })
 }
 
@@ -145,10 +162,10 @@ resource "aws_lambda_function" "worker" {
   filename                       = local.package
   source_code_hash               = filebase64sha256(local.package)
   handler                        = "etf_autopilot.aws_handler.handler"
-  runtime                        = "python3.13"
+  runtime                        = "python3.14"
   architectures                  = ["x86_64"]
-  memory_size                    = 256
-  timeout                        = 30
+  memory_size                    = var.enable_forward_runtime ? 512 : 256
+  timeout                        = var.enable_forward_runtime ? 180 : 30
   reserved_concurrent_executions = var.worker_reserved_concurrency
   role                           = aws_iam_role.worker.arn
 
@@ -158,10 +175,15 @@ resource "aws_lambda_function" "worker" {
   }
 
   environment {
-    variables = {
+    variables = merge({
       EXECUTION_MODE = "paper"
       STATE_BUCKET   = aws_s3_bucket.state.id
-    }
+      }, var.enable_forward_runtime ? {
+      FORWARD_ENABLED           = "true"
+      FORWARD_ALLOW_MODEL_CALLS = tostring(var.enable_forward_model_calls)
+      FORWARD_RUNTIME_HASH      = var.forward_runtime_hash
+      FORWARD_ALERT_TOPIC       = aws_sns_topic.forward_alerts[0].arn
+    } : {})
   }
 
   # Configure storage protections and permissions before the worker becomes invocable.
@@ -171,6 +193,8 @@ resource "aws_lambda_function" "worker" {
     aws_s3_bucket_public_access_block.state,
     aws_s3_bucket_server_side_encryption_configuration.state,
     aws_s3_bucket_versioning.state,
+    aws_iam_role_policy.forward_runtime,
+    aws_iam_role_policy.forward_model,
   ]
 }
 

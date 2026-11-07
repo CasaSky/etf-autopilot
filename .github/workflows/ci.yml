@@ -8,6 +8,10 @@ jobs:
   test:
     if: github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.14.10', '3.15.2']
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -16,15 +20,17 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: '3.13'
+          python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: requirements.lock
+          cache-dependency-path: |
+            requirements.lock
+            requirements-aws.lock
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: '1.16.1'
+          terraform_version: '1.17.1'
           terraform_wrapper: false
       - run: python scripts/check_private_files.py --history
-      - run: python -m pip install -r requirements.lock
+      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
       - run: python -m pip install --no-deps --no-build-isolation -e .
       - run: python -S examples/paper_demo.py --output-dir var/ci-quickstart
       - run: ruff check . && ruff format --check .
@@ -38,6 +44,6 @@ jobs:
       - run: python -m build --no-isolation
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: synthetic-paper-report
+          name: synthetic-paper-report-${{ matrix.python }}
           path: var/paper-report.md
           retention-days: 7

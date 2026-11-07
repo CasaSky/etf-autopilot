@@ -57,6 +57,9 @@ def main(argv=None):
     parser.add_argument("--config", default="config/paper.json")
     parser.add_argument("--state", help="State file; forward research uses its own default")
     commands = parser.add_subparsers(dest="command", required=True)
+    from .forward_operator import add_operator_commands
+
+    add_operator_commands(commands)
     demo = commands.add_parser("demo", help="Replay deterministic synthetic monthly events")
     demo.add_argument("--fixture", default="fixtures/monthly_events.json")
     demo.add_argument("--report", default="var/paper-report.md")
@@ -186,6 +189,19 @@ def main(argv=None):
         "var/forward-paper.sqlite3" if args.command.startswith("forward-") else "var/paper.sqlite3"
     )
     try:
+        if args.command in {
+            "forward-review-code",
+            "forward-runtime",
+            "forward-cloud-choice-abandon",
+            "forward-transfer-freeze",
+            "forward-transfer-install",
+            "forward-transfer-complete",
+            "forward-transfer-abort",
+        }:
+            from .forward_operator import operator_command
+
+            print(json.dumps(operator_command(args), indent=2))
+            return 0
         if args.command.startswith("forward-"):
             from .forward import (
                 forward_markdown,

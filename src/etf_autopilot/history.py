@@ -406,7 +406,7 @@ def _rows_from_csv(raw, manifest):
                 raise SafetyError("unaligned_history_observations")
             period_row["signals"][asset] = str(values[0])
             period_row["executions"][asset] = str(values[1])
-    except (UnicodeError, csv.Error, TypeError, KeyError):
+    except UnicodeError, csv.Error, TypeError, KeyError:
         raise SafetyError("malformed_history_csv") from None
     rows = [grouped[period] for period in sorted(grouped)]
     if len(rows) < 12:

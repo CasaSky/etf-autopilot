@@ -18,3 +18,11 @@ output "health_schedule_group" {
 output "failure_queue_url" {
   value = aws_sqs_queue.failures.url
 }
+
+output "forward_schedule_name" {
+  value = try(aws_scheduler_schedule.forward[0].name, null)
+}
+
+output "forward_alert_topic_arn" {
+  value = try(aws_sns_topic.forward_alerts[0].arn, null)
+}

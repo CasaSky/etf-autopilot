@@ -11,7 +11,7 @@ pushes to `main`; include your local verification results in the pull request.
 
 ## Set up development
 
-From a checkout with Python 3.13 or later:
+From a checkout with Python 3.14 or later:
 
 ```sh
 python3 -m venv .venv

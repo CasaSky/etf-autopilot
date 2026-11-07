@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import zipfile
@@ -10,6 +11,7 @@ from etf_autopilot.aws_handler import handler
 from etf_autopilot.domain import SafetyError, canonical
 from etf_autopilot.engine import initial_state, run_event
 from etf_autopilot.store import MAX_STATE_BYTES, S3Store
+from scripts.package_lambda import SDK_PREFIXES
 from scripts.package_lambda import main as package_lambda
 
 from .conftest import ROOT
@@ -240,7 +242,17 @@ def test_lambda_package_contains_only_allowlisted_source_and_fixture_config():
         files = archive.namelist()
         assert "etf_autopilot/aws_handler.py" in files
         assert "etf_autopilot/paper.json" in files
-        assert all(name.startswith("etf_autopilot/") for name in files)
+        assert "boto3/__init__.py" in files and "botocore/__init__.py" in files
+        assert all(
+            name.startswith("etf_autopilot/")
+            or any(name.startswith(prefix) for prefix in SDK_PREFIXES.values())
+            or ".dist-info/" in name
+            for name in files
+        )
+        assert not any(name.endswith((".so", ".dylib", ".pyd", ".pyc")) for name in files)
         assert not any(
             any(part in name for part in (".env", ".aws", ".git", "sqlite")) for name in files
         )
+    first = hashlib.sha256((ROOT / "var/lambda.zip").read_bytes()).hexdigest()
+    package_lambda()
+    assert hashlib.sha256((ROOT / "var/lambda.zip").read_bytes()).hexdigest() == first

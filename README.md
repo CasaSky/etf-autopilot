@@ -6,7 +6,10 @@ ETF Autopilot is an experimental Python toolkit for paper investing, determinist
 risk checks and reproducible strategy evaluation. Its central question is whether
 AI can improve an investment process after trading and operating costs.
 
-**Early development · Paper only · Python 3.13+ · MIT**
+**Early development · Paper only · Python 3.14+ · MIT**
+
+The optional [AWS forward-paper runtime](docs/FORWARD_CLOUD.md) preserves the local
+trial's history and budget. It stays disabled until a reviewed deployment.
 
 The paper engine, evaluation tools and bounded allocation interface work today.
 Verified market feeds and unattended operation are still being implemented. Current
@@ -14,7 +17,7 @@ examples use synthetic data and make no investment-performance claim.
 
 ## Try it with one command
 
-From a checkout, with Python 3.13 or later:
+From a checkout, with Python 3.14 or later:
 
 ```sh
 python3 examples/paper_demo.py

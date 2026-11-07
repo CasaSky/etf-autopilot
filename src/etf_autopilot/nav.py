@@ -184,7 +184,7 @@ def read_nav(path, binding):
             ):
                 raise SafetyError("unsafe_or_oversized_nav_workbook")
             rows = _rows(archive)
-    except (BadZipFile, KeyError, RuntimeError, NotImplementedError, OSError):
+    except BadZipFile, KeyError, RuntimeError, NotImplementedError, OSError:
         raise SafetyError("invalid_nav_workbook") from None
     if (
         any(

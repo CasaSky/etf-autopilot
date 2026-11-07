@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .domain import ZERO, SafetyError, digest, instant, money, number, validate_config
 from .engine import ACCOUNTS, account_operations, execute_paper_plans, mark
+from .forward_control import initial_control, owned_store
 from .forward_selection import reserve_choice, verify_choice
 from .observations import validate_observations
 from .paper import equity, new_account, reconcile
@@ -27,6 +28,9 @@ def trial_engine_fingerprint():
     names = (
         "forward.py",
         "forward_selection.py",
+        "forward_control.py",
+        "forward_transfer.py",
+        "store.py",
         "selection.py",
         "engine.py",
         "domain.py",
@@ -100,6 +104,7 @@ def _initial(base, data, now):
     return {
         "version": 1,
         "mode": MODE,
+        "control": initial_control(),
         "trial_started_at": now.isoformat(),
         "base_config_hash": digest(base),
         "config": config,
@@ -219,6 +224,7 @@ def run_forward_cycle(
     store, base_config, data, *, now=None, operating_cost_eur="0.01", fault=None, selection=None
 ):
     """One finite deterministic cycle. Injected clocks/faults are for fixtures only."""
+    store = owned_store(store)
     validate_config(base_config)
     if "data_contract" in base_config:
         raise SafetyError("forward_base_config_required")
@@ -418,6 +424,8 @@ def run_forward_cycle(
 
 
 def reconcile_forward(store):
+    store = owned_store(store)
+
     def transition(state):
         if state is None or state.get("mode") != MODE:
             raise SafetyError("forward_trial_required")

@@ -2,11 +2,11 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 
-import httpx
+import httpx2 as httpx
 import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
-from mcp.types import CallToolResult
+from mcp_types import CallToolResult
 
 from etf_autopilot.bitpanda import (
     BLOCKED_TOOLS,
@@ -155,7 +155,9 @@ def test_official_sdk_protocol_over_mock_http_without_contacting_bitpanda():
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
                     page = await session.list_tools()
-                    catalog = validate_catalog([tool.model_dump() for tool in page.tools])
+                    catalog = validate_catalog(
+                        [tool.model_dump(by_alias=True) for tool in page.tools]
+                    )
                     c = ReadOnlyPublicMCP(
                         session, Credentials(KEY, "2099-01-01T00:00:00Z"), catalog
                     )

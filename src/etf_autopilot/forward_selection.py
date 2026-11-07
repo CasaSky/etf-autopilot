@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 
 from .domain import SafetyError, canonical, digest, instant, number
+from .forward_control import owned_store
 from .selection import SYSTEM, decode_choice, validate_provider_options
 
 
@@ -90,6 +91,7 @@ def run_forward_decision(
 ):
     from .forward import run_forward_cycle, trial_engine_fingerprint
 
+    store = owned_store(store)
     clock = clock or (lambda: datetime.now(UTC))
     amount = validate_provider_options(provider, provider_name, reserved_cost_eur)
     selection = (
@@ -166,13 +168,21 @@ def run_forward_decision(
     return {**result, "selection_status": receipt["status"]}
 
 
-def abandon_forward_selection(store, decision_id):
+def abandon_forward_selection(store, decision_id, *, config=None, expected_state_hash=None):
     """Close an unknown attempt explicitly; preserve the month and all reserved cost."""
     from .forward import MODE
+
+    store = owned_store(store)
 
     def transition(state):
         if state is None or state.get("mode") != MODE:
             raise SafetyError("forward_trial_required")
+        if expected_state_hash is not None:
+            from .forward_control import check_config
+
+            check_config(state, config)
+            if digest(state) != expected_state_hash:
+                raise SafetyError("forward_abandon_state_changed")
         decision = state["decisions"].get(decision_id)
         if decision is None or decision["status"] != "reserved":
             raise SafetyError("no_reserved_forward_selection_to_abandon")

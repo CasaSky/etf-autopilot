@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=80"]
+requires = ["setuptools>=84.2.1,<85"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,14 +9,14 @@ description = "Auditable ETF paper investing and reproducible AI strategy experi
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = []
 keywords = ["etf", "paper-trading", "ai-agents", "mcp", "portfolio", "backtesting"]
 
 [project.optional-dependencies]
-broker = ["mcp>=1.26,<2", "jsonschema>=4.26,<5"]
-aws = ["boto3>=1.40,<2"]
-dev = ["pytest>=9,<10", "ruff>=0.14,<1", "pyyaml>=6,<7", "build>=1,<2"]
+broker = ["mcp>=2.3,<3", "httpx2>=2.10,<3", "jsonschema>=4.26,<5"]
+aws = ["boto3>=1.43.126,<2"]
+dev = ["pytest>=9.2,<10", "ruff>=0.17.4,<1", "build>=1.6.1,<2", "setuptools>=84.2.1,<85", "pip>=26.3,<27"]
 
 [project.scripts]
 etf-autopilot = "etf_autopilot.cli:main"
@@ -30,7 +30,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

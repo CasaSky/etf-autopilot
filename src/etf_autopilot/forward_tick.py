@@ -7,6 +7,7 @@ from pathlib import Path
 from .capture import capture_issuer
 from .domain import SafetyError, digest, load_json, number, validate_config
 from .forward import MODE, forward_markdown, forward_summary, trial_engine_fingerprint
+from .forward_control import owned_store
 from .forward_selection import run_forward_decision
 from .history import write_immutable_json
 from .observations import save_observations
@@ -35,6 +36,7 @@ def run_forward_tick(
     A scheduler may supply stable attempt IDs. This function does not start one,
     sleep, retry failed captures, upload data or grant permissions.
     """
+    store = owned_store(store)
     validate_config(config)
     if "data_contract" in config:
         raise SafetyError("forward_base_config_required")

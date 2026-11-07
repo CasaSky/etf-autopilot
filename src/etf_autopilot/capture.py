@@ -47,7 +47,7 @@ def _download(url, limit, deadline):
                     raise SafetyError("issuer_capture_source_size_limit")
                 parts.append(chunk)
             return b"".join(parts)
-    except (HTTPError, URLError, TimeoutError, OSError, HTTPException):
+    except HTTPError, URLError, TimeoutError, OSError, HTTPException:
         raise SafetyError("issuer_capture_network_failure") from None
 
 

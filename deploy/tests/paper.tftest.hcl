@@ -31,6 +31,10 @@ mock_provider "aws" {
   mock_resource "aws_scheduler_schedule_group" {
     defaults = { arn = "arn:aws:scheduler:eu-central-1:123456789012:schedule-group/etf-autopilot-paper" }
   }
+
+  mock_resource "aws_sns_topic" {
+    defaults = { arn = "arn:aws:sns:eu-central-1:123456789012:etf-autopilot-paper-alerts" }
+  }
 }
 
 variables {
@@ -47,7 +51,7 @@ run "safe_defaults" {
       aws_lambda_function.worker.reserved_concurrent_executions == 1 &&
       aws_lambda_function.worker.memory_size == 256 &&
       aws_lambda_function.worker.timeout == 30 &&
-      aws_lambda_function.worker.runtime == "python3.13"
+      aws_lambda_function.worker.runtime == "python3.14"
     )
     error_message = "The worker must remain paper-only, serial and bounded in memory/runtime."
   }
@@ -163,4 +167,133 @@ run "reject_parallel_execution" {
   }
 
   expect_failures = [var.worker_reserved_concurrency]
+}
+
+run "forward_is_disabled_by_default" {
+  command = plan
+
+  assert {
+    condition = (
+      length(aws_scheduler_schedule.forward) == 0 &&
+      length(aws_iam_role_policy.forward_model) == 0 &&
+      length(aws_iam_role_policy.forward_runtime) == 0 &&
+      length(aws_sns_topic.forward_alerts) == 0 &&
+      !contains(keys(aws_lambda_function.worker.environment[0].variables), "FORWARD_ENABLED")
+    )
+    error_message = "Forward capture, inference and alerts must require a separate opt-in."
+  }
+}
+
+run "forward_preparation_keeps_worker_and_schedules_stopped" {
+  command = plan
+
+  variables {
+    enable_forward_runtime      = true
+    forward_runtime_hash        = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    forward_alert_email         = "fixture@example.invalid"
+    worker_reserved_concurrency = 0
+  }
+
+  assert {
+    condition = (
+      aws_lambda_function.worker.memory_size == 512 &&
+      aws_lambda_function.worker.timeout == 180 &&
+      aws_lambda_function.worker.reserved_concurrent_executions == 0 &&
+      aws_scheduler_schedule.forward[0].state == "DISABLED" &&
+      aws_scheduler_schedule.health.state == "DISABLED" &&
+      length(aws_iam_role_policy.forward_model) == 0 &&
+      aws_lambda_function.worker.environment[0].variables.FORWARD_ALLOW_MODEL_CALLS == "false"
+    )
+    error_message = "Preparing the runtime cannot activate capture or inference."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_s3_bucket_policy.state.policy).Statement[2].Condition.Null == { "s3:if-match" = "true", "s3:if-none-match" = "true" } &&
+      jsondecode(aws_s3_bucket_policy.state.policy).Statement[2].Resource == "${aws_s3_bucket.state.arn}/paper/forward/state.json" &&
+      jsondecode(aws_s3_bucket_policy.state.policy).Statement[3].Condition.Null == { "s3:if-none-match" = "true" } &&
+      jsondecode(aws_s3_bucket_policy.state.policy).Statement[3].Resource == "${aws_s3_bucket.state.arn}/paper/forward/ticks/*"
+    )
+    error_message = "Forward state requires CAS; daily evidence requires immutable conditional creation."
+  }
+
+  assert {
+    condition = (
+      toset(flatten([for statement in jsondecode(aws_iam_role_policy.forward_runtime[0].policy).Statement : statement.Action])) == toset(["s3:GetObject", "s3:PutObject", "sns:Publish"]) &&
+      toset(jsondecode(aws_iam_role_policy.forward_runtime[0].policy).Statement[1].Resource) == toset([
+        "${aws_s3_bucket.state.arn}/paper/forward/state.json", "${aws_s3_bucket.state.arn}/paper/forward/ticks/*"
+      ]) &&
+      jsondecode(aws_iam_role_policy.forward_runtime[0].policy).Statement[2].Resource == [aws_sns_topic.forward_alerts[0].arn]
+    )
+    error_message = "Forward writes must exclude runtime inputs, secrets and unrelated applications."
+  }
+
+  assert {
+    condition = (
+      aws_sns_topic_subscription.forward_alerts[0].protocol == "email" &&
+      jsondecode(aws_sns_topic_policy.forward_alerts[0].policy).Statement[1].Condition.StringEquals["aws:SourceAccount"] == var.aws_account_id &&
+      toset(jsondecode(aws_sns_topic_policy.forward_alerts[0].policy).Statement[1].Condition.ArnEquals["aws:SourceArn"]) == toset([
+        "arn:aws:cloudwatch:${var.aws_region}:${var.aws_account_id}:alarm:${aws_cloudwatch_metric_alarm.forward_worker_errors[0].alarm_name}",
+        "arn:aws:cloudwatch:${var.aws_region}:${var.aws_account_id}:alarm:${aws_cloudwatch_metric_alarm.forward_delivery_failures[0].alarm_name}"
+      ]) &&
+      aws_cloudwatch_metric_alarm.forward_worker_errors[0].dimensions == tomap({ FunctionName = aws_lambda_function.worker.function_name }) &&
+      aws_cloudwatch_metric_alarm.forward_delivery_failures[0].dimensions == tomap({ QueueName = aws_sqs_queue.failures.name })
+    )
+    error_message = "Notifications must bind only this account's exact worker and failure-queue alarms."
+  }
+}
+
+run "forward_activation_is_bounded" {
+  command = plan
+
+  variables {
+    enable_forward_runtime     = true
+    enable_forward_model_calls = true
+    enable_forward_schedule    = true
+    forward_alert_confirmed    = true
+    forward_runtime_hash       = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    forward_alert_email        = "fixture@example.invalid"
+  }
+
+  assert {
+    condition = (
+      aws_scheduler_schedule.forward[0].state == "ENABLED" &&
+      aws_scheduler_schedule.forward[0].schedule_expression == "cron(0 8 * * ? *)" &&
+      aws_scheduler_schedule.forward[0].schedule_expression_timezone == "UTC" &&
+      jsondecode(aws_scheduler_schedule.forward[0].target[0].input) == {
+        action = "forward_tick", scheduled_at = "<aws.scheduler.scheduled-time>"
+      } &&
+      aws_scheduler_schedule.forward[0].target[0].retry_policy[0].maximum_retry_attempts == 0 &&
+      aws_scheduler_schedule.forward[0].target[0].retry_policy[0].maximum_event_age_in_seconds == 300 &&
+      aws_scheduler_schedule.health.state == "DISABLED"
+    )
+    error_message = "Only one daily UTC paper trigger is authorized, with no automatic delivery retry."
+  }
+
+  assert {
+    condition = (
+      toset(flatten([for statement in jsondecode(aws_iam_role_policy.forward_model[0].policy).Statement : statement.Action])) == toset(["bedrock:InvokeModel"]) &&
+      jsondecode(aws_iam_role_policy.forward_model[0].policy).Statement[0].Resource == ["arn:aws:bedrock:eu-central-1:123456789012:inference-profile/eu.amazon.nova-micro-v1:0"] &&
+      length(jsondecode(aws_iam_role_policy.forward_model[0].policy).Statement[1].Resource) == 4 &&
+      jsondecode(aws_iam_role_policy.forward_model[0].policy).Statement[1].Condition.StringEquals["bedrock:InferenceProfileArn"] == "arn:aws:bedrock:eu-central-1:123456789012:inference-profile/eu.amazon.nova-micro-v1:0"
+    )
+    error_message = "Inference IAM must grant only the exact EU Nova Micro profile and its four reviewed routes."
+  }
+}
+
+run "reject_schedule_before_alert_confirmation" {
+  command = plan
+  variables {
+    enable_forward_runtime  = true
+    enable_forward_schedule = true
+    forward_runtime_hash    = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    forward_alert_email     = "fixture@example.invalid"
+  }
+  expect_failures = [var.enable_forward_schedule]
+}
+
+run "reject_model_without_runtime" {
+  command = plan
+  variables { enable_forward_model_calls = true }
+  expect_failures = [var.enable_forward_model_calls]
 }

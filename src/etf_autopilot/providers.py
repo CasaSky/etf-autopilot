@@ -39,7 +39,7 @@ def _read_daily(path):
     raw = path.read_bytes()
     try:
         rows = json.loads(raw, parse_float=str, parse_int=str)
-    except (ValueError, UnicodeError):
+    except ValueError, UnicodeError:
         raise SafetyError("invalid_eodhd_json") from None
     if not isinstance(rows, list) or not 1 <= len(rows) <= 50_000:
         raise SafetyError("daily_provider_array_required")
@@ -61,7 +61,7 @@ def _read_daily(path):
             ):
                 raise ValueError
             day = date.fromisoformat(row["date"])
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             raise SafetyError("invalid_provider_bar_date") from None
         period_number(day.strftime("%Y-%m"))
         if day.weekday() >= 5:

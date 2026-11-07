@@ -1,4 +1,5 @@
-include LICENSE README.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md requirements.lock
+include LICENSE README.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md requirements.lock requirements-aws.lock
+include .python-version
 include .gitignore .gitattributes .editorconfig
 recursive-include config *.json
 recursive-include fixtures *.json *.csv
@@ -11,8 +12,9 @@ include docs/PRIVACY.md
 include docs/PROVIDER_IMPORT.md
 include docs/AI_DECISIONS.md
 include docs/ISSUER_IMPORT.md
-include docs/FORWARD_PAPER.md
+include docs/FORWARD_PAPER.md docs/FORWARD_CLOUD.md
 include deploy/README.md deploy/main.tf deploy/versions.tf deploy/variables.tf deploy/outputs.tf
+include deploy/forward.tf
 include deploy/.terraform.lock.hcl deploy/terraform.tfvars.example
 include deploy/backend.tf.example deploy/backend.hcl.example
 recursive-include deploy/tests *.tftest.hcl

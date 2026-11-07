@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from .domain import SafetyError, instant, number
 from .forward import MODE, trial_engine_fingerprint
+from .forward_control import initial_control
 
 
 def forward_status(state, *, now=None):
@@ -26,7 +27,13 @@ def forward_status(state, *, now=None):
         "ready_for_new_capture",
         "Capture and verify the next actual source observation.",
     )
-    if state["engine_fingerprint"] != trial_engine_fingerprint():
+    control = state.get("control", initial_control())
+    if control["status"] != "active":
+        status, action = (
+            "controller_fenced",
+            "Finish or safely cancel the recorded controller transfer.",
+        )
+    elif state["engine_fingerprint"] != trial_engine_fingerprint():
         status, action = (
             "review_required",
             "Review changed financial/source code before advancing this trial.",
@@ -84,6 +91,7 @@ def forward_status(state, *, now=None):
             )
         ),
         "pending_decision": state["pending"],
+        "controller": {key: control[key] for key in ("owner", "status", "epoch")},
         "halt": state["halt"],
         "state_changes": False,
         "network_calls": 0,

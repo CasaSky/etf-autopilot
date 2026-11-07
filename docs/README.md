@@ -15,6 +15,7 @@ examples are synthetic and the default runtime is paper-only.
 | Recover a stopped or uncertain paper run | [Operations](OPERATIONS.md) |
 | Try an explicitly read-only account connection | [Broker integration](BROKER.md) |
 | Review the optional AWS paper worker | [Deployment](../deploy/README.md) |
+| Move a forward trial to a bounded AWS runtime | [Cloud paper operations](FORWARD_CLOUD.md) |
 | Find a useful contribution | [Roadmap](ROADMAP.md) and [contribution guide](../CONTRIBUTING.md) |
 | Maintain the public repository | [Publishing](PUBLISHING.md) |
 | Keep private files out of commits and history | [Privacy](PRIVACY.md) |
@@ -31,6 +32,8 @@ The core source is intentionally small and direct:
 - `issuer.py`: offline fund-growth exports, explicit reference FX and shared-date provenance.
 - `capture.py` / `observations.py`: immutable source receipts and daily research indices.
 - `forward.py`: committed targets, later observations and a separate paper research ledger.
+- `forward_cloud.py`: bounded cloud capture and recovery over the existing financial engine.
+- `forward_control.py` / `forward_transfer.py`: one active controller and a reversible handoff.
 - `market.py`: typed ticker evidence that distinguishes retrieval time from price time.
 - `operations.py` / `bitpanda.py`: optional diagnosis and read-only broker boundaries.
 

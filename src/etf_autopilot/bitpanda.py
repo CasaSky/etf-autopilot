@@ -10,12 +10,13 @@ import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-import httpx
+import httpx2 as httpx
 from jsonschema import Draft202012Validator, ValidationError
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp_types import PaginatedRequestParams
 
 from .domain import SafetyError, canonical, digest, instant
 from .instruments import asset_uuid, resolve_etf, validate_isin
@@ -94,7 +95,7 @@ def normalize_result(result, output_schema=None):
             raise SafetyError("unverified_tool_response_shape")
         try:
             payload = json.loads(blocks[0]["text"], parse_float=str)
-        except (ValueError, KeyError):
+        except ValueError, KeyError:
             raise SafetyError("unverified_tool_response_shape") from None
     if len(canonical(payload).encode()) > MAX_RESPONSE_BYTES:
         raise SafetyError("broker_response_too_large")
@@ -152,18 +153,16 @@ async def connect(credentials):
                 trust_env=False,
             ) as http,
         ):
-            async with streamable_http_client(ENDPOINT, http_client=http) as (read, write, _):
-                async with ClientSession(
-                    read, write, read_timeout_seconds=timedelta(seconds=20)
-                ) as s:
+            async with streamable_http_client(ENDPOINT, http_client=http) as (read, write):
+                async with ClientSession(read, write, read_timeout_seconds=20.0) as s:
                     await s.initialize()
                     discovered, cursor = [], None
                     for _ in range(5):
-                        page = await s.list_tools(cursor=cursor)
+                        page = await s.list_tools(params=PaginatedRequestParams(cursor=cursor))
                         discovered.extend(
                             t.model_dump(by_alias=True, exclude_none=True) for t in page.tools
                         )
-                        cursor = page.nextCursor
+                        cursor = page.next_cursor
                         if not cursor:
                             break
                     if cursor:

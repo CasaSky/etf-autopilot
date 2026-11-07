@@ -153,7 +153,7 @@ def run_event(store, config, event, *, fault=None, allocation_id=None):
         try:
             try:
                 validate_market(event, config)
-            except (KeyError, TypeError, ValueError, AttributeError):
+            except KeyError, TypeError, ValueError, AttributeError:
                 raise SafetyError("malformed_market_event") from None
             if state["last_at"] and instant(event["at"]) <= instant(state["last_at"]):
                 raise SafetyError("nonmonotonic_event")

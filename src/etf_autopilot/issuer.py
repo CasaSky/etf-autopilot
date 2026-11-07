@@ -64,7 +64,7 @@ def _day(value, *, growth=False):
     day, month, year = parts
     try:
         result = date(int(year), MONTHS[month.replace("Sept", "Sep")], int(day))
-    except (ValueError, KeyError):
+    except ValueError, KeyError:
         raise SafetyError("invalid_issuer_date") from None
     if growth and (weekday != WEEKDAYS[result.weekday()] or result.weekday() >= 5):
         raise SafetyError("invalid_issuer_observation_weekday")

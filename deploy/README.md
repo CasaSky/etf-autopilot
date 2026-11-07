@@ -3,7 +3,8 @@
 **Validated locally and smoke-tested in an isolated AWS paper deployment.** Each
 installation needs an explicit AWS profile/account, region and monthly budget,
 plus an alert route before unattended operation. No broker credentials,
-permanent broker budget, model permissions or money are configured by this module.
+permanent broker budget or money are configured. Optional forward-paper inference
+and alerts require separate explicit settings and a reviewed deployment.
 Use only this repository's `deploy/` root and its `etf-autopilot-paper` resources.
 Terraform replaces the earlier SAM template; there is one infrastructure definition.
 
@@ -15,7 +16,7 @@ are still untested with real market data.
 
 ## Resources and limits
 
-Terraform creates one Python 3.13 Lambda, a private AES256-encrypted,
+The default configuration creates one Python 3.14 Lambda, a private AES256-encrypted,
 versioned S3 bucket, an SQS failure queue, seven-day CloudWatch logs, scoped IAM
 roles and a **disabled** daily EventBridge Scheduler health check. The worker has
 256 MB, a 30-second timeout and reserved concurrency one. Async Lambda and
@@ -30,8 +31,9 @@ AgentCore Gateway or always-on service is provisioned.
 
 The health schedule runs at 18:00 Europe/Berlin if explicitly enabled. It only
 checks persisted paper state. New investment decisions require an explicitly
-uploaded synthetic input event and a finite worker invocation. Live market data
-and financial production scheduling remain later work. The architecture supports
+uploaded synthetic input event and a finite worker invocation. The optional issuer-data research path is documented in
+[forward-paper cloud operations](../docs/FORWARD_CLOUD.md). Its schedule is
+separate, off by default and cannot place real orders. The architecture supports
 Scheduler → Lambda with S3 CAS persistence, not a GitHub scheduled trading loop.
 
 The source also provides a finite `cycle` action: it reads that same fixed input,
@@ -71,7 +73,9 @@ Application checks cap optional model calls, estimated spend and new market
 events; they cannot prevent infrastructure charges from repeated invocations.
 Do not enable broad public invocation. Before unattended use, review an actual
 AWS Pricing Calculator estimate and add the chosen budget/error notifications.
-No notification destination or paid alarm is silently created here.
+Defaults create no notification destination or paid alarm. The optional forward
+runtime adds two alarms and an explicitly chosen private email subscription;
+review its separate estimate before opting in.
 
 Sources: [Lambda pricing](https://aws.amazon.com/lambda/pricing/),
 [S3 pricing](https://aws.amazon.com/s3/pricing/),
@@ -88,6 +92,7 @@ Catalog checks: [Frankfurt Lambda](https://pricing.us-east-1.amazonaws.com/offer
 ```sh
 .venv/bin/pytest -q
 .venv/bin/ruff check .
+.venv/bin/ruff format --check .
 .venv/bin/python scripts/package_lambda.py
 terraform fmt -check -recursive deploy
 terraform -chdir=deploy init -backend=false -input=false -lockfile=readonly
@@ -95,8 +100,8 @@ terraform -chdir=deploy validate
 terraform -chdir=deploy test
 ```
 
-Tested with Terraform 1.16.1; the module requires 1.16 or later in the 1.x line.
-The committed provider lock file pins AWS provider 6.70.0. Native Terraform tests
+Tested with Terraform 1.17.1; the module requires 1.17.1 or later in the 1.x line.
+The committed provider lock file pins AWS provider 6.72.0. Native Terraform tests
 use a **mocked AWS provider and plan operations only**. They do not use credentials,
 call AWS or create resources. They check paper mode, private/CAS-protected state,
 IAM scope, scheduler trust, retry limits, opt-in scheduling and stopping the worker.
@@ -104,11 +109,17 @@ Provider downloads require internet access. There is no deployment step in CI.
 
 Packaging uses an allowlist of application Python sources and the paper config;
 it never zips the repository root, `.env`, local state, `.venv` or `.aws`.
-The paper worker uses the managed Python Lambda runtime's boto3/botocore. Locally,
-conditional PutObject support is checked with the locked SDK and botocore Stubber.
-No native macOS wheel is shipped. A managed-runtime smoke test is required after
-reviewed provisioning; if SDK behavior changes, pin/bundle only that SDK in a new
-reviewed package. The MCP/Bedrock connectors are not invoked by this deployment.
+The package includes only the pure Python AWS SDK dependencies pinned with hashes
+in `requirements-aws.lock`, including their licenses and metadata. The packager
+rejects unexpected dependencies, version mismatches, native binaries and symlinks;
+fixed ZIP timestamps make unchanged inputs reproducible. It excludes the MCP SDK
+and credentials. Conditional PutObject is checked with the locked SDK and botocore
+Stubber. A managed-runtime smoke check still follows approved deployment.
+
+Python 3.14 is the newest generally available Lambda Python runtime reviewed on
+7 November 2026. Python 3.15 is a Lambda public preview, so it is tested locally
+and in CI but is not selected for deployment. See the
+[AWS runtime table](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html).
 
 ## Select the target and Terraform state
 
