@@ -109,8 +109,24 @@ spellings are not guessed. Fund-column, ISIN and currency checks remain mandator
 ## Accumulating NAV and share splits
 
 Import spec version 2 declares `source_format` for each binding:
-`ishares_growth_spreadsheetml_v1` or `ssga_accumulating_nav_xlsx_v1`. The existing
+`ishares_growth_spreadsheetml_v1`, `ssga_accumulating_nav_xlsx_v1` or
+`ishares_accumulating_nav_spreadsheetml_v1`. The existing
 version-1 spec keeps its original growth-only behavior and version-3 output.
+
+The iShares accumulating-bond variant reads `Historical NAVs` from the same public
+export. This table can be newer than the separate growth table. It requires an
+explicit accumulating-class declaration, matching issuer income metadata, reviewed
+launch date and a declared split list. The latest NAV date and value must match
+the fund header; extra nonempty columns, formulas and duplicate dates fail.
+It never substitutes growth values for missing NAVs.
+
+The observed trailing performance notice is accepted only as one final text cell.
+Published weekend quarter-end accounting NAVs are counted and retained in source
+validation. They cannot enter the research calendar because it requires a matching
+ECB working-day observation; other weekend dates fail. Original bytes and all
+calendar exclusions remain in provenance. Neither file report dates nor these
+accounting rows become executable price timestamps. The 36-hour forward freshness
+gate still uses the actual common observation date.
 The NAV format currently supports the equity role, a single English `navhist`
 worksheet, and the observed date/NAV columns. It is not a general Excel importer.
 ISIN, exact name and native currency must match the supplied binding. Check the

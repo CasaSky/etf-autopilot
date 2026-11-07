@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .domain import SafetyError, canonical, digest, instant, load_json, number
-from .nav import GROWTH_FORMAT, NAV_FORMAT, iso_day, validate_splits
+from .nav import GROWTH_FORMAT, ISHARES_NAV_FORMAT, NAV_FORMAT, iso_day, validate_splits
 
 COLUMNS = (
     "period",
@@ -262,11 +262,15 @@ def validate_issuer_provenance(manifest):
         if not isinstance(source, dict):
             raise SafetyError("unsupported_issuer_source")
         expected = fields
-        nav = manifest["version"] == 4 and source.get("source_format") == NAV_FORMAT
+        nav = manifest["version"] == 4 and source.get("source_format") in {
+            NAV_FORMAT,
+            ISHARES_NAV_FORMAT,
+        }
         if manifest["version"] == 4:
             if not isinstance(source.get("source_format"), str) or source["source_format"] not in {
                 GROWTH_FORMAT,
                 NAV_FORMAT,
+                ISHARES_NAV_FORMAT,
             }:
                 raise SafetyError("unsupported_issuer_source_format")
             expected = expected | {"source_format"}
@@ -276,11 +280,20 @@ def validate_issuer_provenance(manifest):
                 | reviewed_fields
                 | {"income_treatment", "report_date", "split_adjustments"}
             )
-            if (
-                source.get("income_treatment") != "accumulating"
-                or manifest["instruments"][asset]["class"] != "equity"
+            if source.get("income_treatment") != "accumulating" or manifest["instruments"][asset][
+                "class"
+            ] != ("equity" if source["source_format"] == NAV_FORMAT else "bond"):
+                raise SafetyError(
+                    "accumulating_equity_nav_required"
+                    if source["source_format"] == NAV_FORMAT
+                    else "accumulating_bond_nav_required"
+                )
+        if manifest["version"] == 4 and source["source_format"] == ISHARES_NAV_FORMAT:
+            expected = expected | {"weekend_quarter_end_rows"}
+            if type(source.get("weekend_quarter_end_rows")) is not int or not (
+                0 <= source["weekend_quarter_end_rows"] <= 50_000
             ):
-                raise SafetyError("accumulating_equity_nav_required")
+                raise SafetyError("invalid_issuer_source_count")
         if set(source) not in (expected, expected | reviewed_fields):
             raise SafetyError("unsupported_issuer_source")
         if "metadata_basis" in source:

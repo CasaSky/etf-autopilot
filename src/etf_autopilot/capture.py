@@ -14,7 +14,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 from .domain import SafetyError, digest, instant, load_json
 from .history import ECB_HISTORY_URL, validate_dataset, write_immutable_json
 from .issuer import import_issuer
-from .nav import GROWTH_FORMAT, NAV_FORMAT
+from .nav import GROWTH_FORMAT, ISHARES_NAV_FORMAT, NAV_FORMAT
 
 MAX_CAPTURE_SECONDS = 45
 
@@ -88,7 +88,7 @@ def _requests(plan):
             if (
                 not isinstance(product, str)
                 or not re.fullmatch(r"[1-9][0-9]{0,7}", product)
-                or source_format != GROWTH_FORMAT
+                or source_format not in {GROWTH_FORMAT, ISHARES_NAV_FORMAT}
             ):
                 raise SafetyError("invalid_issuer_capture_product")
             url = (

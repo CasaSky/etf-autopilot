@@ -1,5 +1,6 @@
 """Offline issuer growth exports and ECB reference FX -> research proxies only."""
 
+import calendar
 import hashlib
 import io
 import re
@@ -18,7 +19,7 @@ from .history import (
     validate_manifest,
 )
 from .instruments import validate_isin
-from .nav import GROWTH_FORMAT, NAV_FORMAT, iso_day, read_nav
+from .nav import GROWTH_FORMAT, ISHARES_NAV_FORMAT, NAV_FORMAT, adjust_nav_values, iso_day, read_nav
 from .providers import _end_of_day, _month, monthly_csv, write_import
 
 SS = "{urn:schemas-microsoft-com:office:spreadsheet}"
@@ -87,7 +88,7 @@ def _cells(row):
     return result
 
 
-def read_issuer(path, *, reviewed_share_class_launch_date=None):
+def _financial_sheets(path, values_sheet):
     """Parse the ordered financial prefix; never parse/repair later holdings XML.
 
     Hash the entire original file. Some published exports have malformed unrelated
@@ -96,7 +97,7 @@ def read_issuer(path, *, reviewed_share_class_launch_date=None):
     """
     raw, raw_hash = _xml_file(path, 32_000_000)
     sheets = {}
-    targets = {"Fund Header", "Growth of Hypothetical 10,000", "Key Facts"}
+    targets = {"Fund Header", values_sheet, "Key Facts"}
     root_seen = False
     try:
         for action, element in ET.iterparse(io.BytesIO(raw), events=("start", "end")):
@@ -123,15 +124,12 @@ def read_issuer(path, *, reviewed_share_class_launch_date=None):
         raise SafetyError("invalid_issuer_financial_xml") from None
     if set(sheets) != targets:
         raise SafetyError("issuer_financial_prefix_required")
+    return sheets, raw_hash
+
+
+def _fund_metadata(sheets, reviewed_share_class_launch_date):
     header = sheets["Fund Header"][0]
-    growth = sheets["Growth of Hypothetical 10,000"]
-    if (
-        not header
-        or not 1 <= len(header[0]) <= 160
-        or len(growth[0]) != 3
-        or growth[0][0] != ""
-        or growth[0][1] != header[0]
-    ):
+    if not header or not 1 <= len(header[0]) <= 160:
         raise SafetyError("issuer_fund_column_binding_required")
     facts = {}
     for row in sheets["Key Facts"]:
@@ -182,6 +180,18 @@ def read_issuer(path, *, reviewed_share_class_launch_date=None):
         }
     if currency not in {"USD", "EUR"}:
         raise SafetyError("unsupported_issuer_fund_metadata")
+    return header[0], facts, launch, currency, metadata
+
+
+def read_issuer(path, *, reviewed_share_class_launch_date=None):
+    """Read the fund growth column with unchanged income and class checks."""
+    sheets, raw_hash = _financial_sheets(path, "Growth of Hypothetical 10,000")
+    name, facts, launch, currency, metadata = _fund_metadata(
+        sheets, reviewed_share_class_launch_date
+    )
+    growth = sheets["Growth of Hypothetical 10,000"]
+    if len(growth[0]) != 3 or growth[0][0] != "" or growth[0][1] != name:
+        raise SafetyError("issuer_fund_column_binding_required")
     values, seen = {}, set()
     undated, seeds = 0, 0
     for row in growth[1:]:
@@ -215,7 +225,7 @@ def read_issuer(path, *, reviewed_share_class_launch_date=None):
     if not values:
         raise SafetyError("issuer_fund_observations_required")
     return {
-        "fund_name": header[0],
+        "fund_name": name,
         "isin": facts["ISIN"],
         "native_currency": currency,
         "asset_class": facts["Asset Class"],
@@ -224,6 +234,91 @@ def read_issuer(path, *, reviewed_share_class_launch_date=None):
         "undated_benchmark_rows": undated,
         "prelaunch_seed_rows": seeds,
         **metadata,
+    }
+
+
+def read_issuer_nav(path, binding):
+    """Read reviewed accumulating-class NAV; never substitute the growth table."""
+    if binding["income_treatment"] != "accumulating":
+        raise SafetyError("accumulating_nav_required")
+    sheets, raw_hash = _financial_sheets(path, "Historical NAVs")
+    name, facts, launch, currency, _ = _fund_metadata(
+        sheets, binding["reviewed_share_class_launch_date"]
+    )
+    if facts.get("Use of Income") != "Accumulating":
+        raise SafetyError("issuer_accumulating_class_required")
+    header = sheets["Fund Header"]
+    if len(header) < 4 or len(header[2]) != 1 or not header[2][0].startswith("NAV as of "):
+        raise SafetyError("issuer_nav_report_header_required")
+    report = _day(header[2][0][len("NAV as of ") :])
+    nav = re.fullmatch(
+        r"(EUR|USD) ((?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.[0-9]+)?)", header[3][0]
+    )
+    if nav is None or nav[1] != currency:
+        raise SafetyError("issuer_nav_header_currency_mismatch")
+    rows = sheets["Historical NAVs"]
+    if rows[0] != ["", "", "", "", "Historical NAVs"]:
+        raise SafetyError("unsupported_issuer_nav_columns")
+    observations = rows[1:]
+    if (
+        observations
+        and len(observations[-1]) == 1
+        and observations[-1][0].startswith("The figures shown relate to past performance.")
+    ):
+        observations = observations[:-1]
+    values, previous, accounting_weekends = {}, None, 0
+    for row in observations:
+        if not any(row):
+            continue
+        if len(row) != 4 or not row[0] or not row[1] or any(row[2:]):
+            raise SafetyError("issuer_nav_observation_missing_or_ambiguous")
+        day, text = _day(row[0]), row[1]
+        accounting_weekend = day.weekday() >= 5
+        if (
+            (
+                accounting_weekend
+                and not (
+                    day.month in {3, 6, 9, 12}
+                    and day.day == calendar.monthrange(day.year, day.month)[1]
+                )
+            )
+            or day < launch
+            or day > report
+            or (previous is not None and day >= previous)
+        ):
+            raise SafetyError("invalid_nav_observation_date_or_order")
+        if len(text) > 32 or not re.fullmatch(
+            r"(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.[0-9]+)?", text
+        ):
+            raise SafetyError("invalid_nav_value")
+        value = number(text.replace(",", ""))
+        if not number("0.000001") <= value <= number("1000000000"):
+            raise SafetyError("invalid_nav_value")
+        values[day], previous = value, day
+        accounting_weekends += accounting_weekend
+    if (
+        len(values) < 2
+        or max(values) != report
+        or values[report] != number(nav[2].replace(",", ""))
+    ):
+        raise SafetyError("issuer_nav_report_value_mismatch")
+    splits = binding["corporate_actions"]
+    adjusted = adjust_nav_values(values, splits)
+    return {
+        "fund_name": name,
+        "isin": facts["ISIN"],
+        "native_currency": currency,
+        "asset_class": facts["Asset Class"],
+        "raw_sha256": raw_hash,
+        "values": adjusted,
+        "undated_benchmark_rows": 0,
+        "prelaunch_seed_rows": 0,
+        "metadata_basis": "reviewed_accumulating_nav_share_class",
+        "reviewed_share_class_launch_date": launch.isoformat(),
+        "income_treatment": "accumulating",
+        "report_date": report.isoformat(),
+        "split_adjustments": deepcopy(splits),
+        "weekend_quarter_end_rows": accounting_weekends,
     }
 
 
@@ -317,10 +412,11 @@ def prepare_issuer(spec_path, equity_path, bond_path, ecb_path, *, observed_tail
             if not isinstance(source_format, str) or source_format not in {
                 GROWTH_FORMAT,
                 NAV_FORMAT,
+                ISHARES_NAV_FORMAT,
             }:
                 raise SafetyError("unsupported_issuer_source_format")
             fields = fields | {"source_format"}
-        if source_format == NAV_FORMAT:
+        if source_format in {NAV_FORMAT, ISHARES_NAV_FORMAT}:
             fields = fields | {
                 "reviewed_share_class_launch_date",
                 "income_treatment",
@@ -331,8 +427,9 @@ def prepare_issuer(spec_path, equity_path, bond_path, ecb_path, *, observed_tail
             fields | {"reviewed_share_class_launch_date"},
         ):
             raise SafetyError("unsupported_issuer_binding")
-        if source_format == NAV_FORMAT:
-            data = read_nav(paths[role], binding)
+        if source_format in {NAV_FORMAT, ISHARES_NAV_FORMAT}:
+            reader = read_nav if source_format == NAV_FORMAT else read_issuer_nav
+            data = reader(paths[role], binding)
             if iso_day(data["report_date"]) > instant(spec["retrieved_at"]).date():
                 raise SafetyError("invalid_nav_report_date")
         else:
@@ -368,10 +465,12 @@ def prepare_issuer(spec_path, equity_path, bond_path, ecb_path, *, observed_tail
         )
         if spec["version"] == 2:
             sources[asset]["source_format"] = source_format
-        if source_format == NAV_FORMAT:
+        if source_format in {NAV_FORMAT, ISHARES_NAV_FORMAT}:
             sources[asset].update(
                 {key: data[key] for key in ("report_date", "income_treatment", "split_adjustments")}
             )
+        if source_format == ISHARES_NAV_FORMAT:
+            sources[asset]["weekend_quarter_end_rows"] = data["weekend_quarter_end_rows"]
         if "metadata_basis" in data:
             sources[asset].update(
                 {key: data[key] for key in ("metadata_basis", "reviewed_share_class_launch_date")}

@@ -17,6 +17,7 @@ R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 NAV_FORMAT = "ssga_accumulating_nav_xlsx_v1"
 GROWTH_FORMAT = "ishares_growth_spreadsheetml_v1"
+ISHARES_NAV_FORMAT = "ishares_accumulating_nav_spreadsheetml_v1"
 MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 NAV_COLUMNS = ["Date", "NAV", "Shares Outstanding", "Share Class Assets", "Total Fund Assets (USD)"]
 
@@ -230,20 +231,7 @@ def read_nav(path, binding):
         values[day], previous = value, day
     if len(values) < 2:
         raise SafetyError("nav_observations_required")
-    days = sorted(values)
-    factors = {iso_day(item["ex_date"]): number(item["shares_after_per_before"]) for item in splits}
-    for day, factor in factors.items():
-        if day not in values or day == days[0]:
-            raise SafetyError("nav_split_boundary_missing")
-        before = days[days.index(day) - 1]
-        if (day - before).days > 7:
-            raise SafetyError("nav_split_boundary_missing")
-        if not number("0.5") <= values[day] * factor / values[before] <= number("1.5"):
-            raise SafetyError("nav_split_factor_does_not_match_raw_boundary")
-    adjusted = {day: value / _factor_after(day, factors) for day, value in values.items()}
-    for before, after in zip(days, days[1:], strict=False):
-        if not number("0.5") <= adjusted[after] / adjusted[before] <= number("1.5"):
-            raise SafetyError("nav_discontinuity_requires_review")
+    adjusted = adjust_nav_values(values, splits)
     return {
         "fund_name": rows[1].get("B", ""),
         "isin": rows[2].get("B", ""),
@@ -259,6 +247,26 @@ def read_nav(path, binding):
         "report_date": report.isoformat(),
         "split_adjustments": deepcopy(splits),
     }
+
+
+def adjust_nav_values(values, splits):
+    """Apply only declared splits, with the same boundary and discontinuity checks."""
+    validate_splits(splits)
+    days = sorted(values)
+    factors = {iso_day(item["ex_date"]): number(item["shares_after_per_before"]) for item in splits}
+    for day, factor in factors.items():
+        if day not in values or day == days[0]:
+            raise SafetyError("nav_split_boundary_missing")
+        before = days[days.index(day) - 1]
+        if (day - before).days > 7:
+            raise SafetyError("nav_split_boundary_missing")
+        if not number("0.5") <= values[day] * factor / values[before] <= number("1.5"):
+            raise SafetyError("nav_split_factor_does_not_match_raw_boundary")
+    adjusted = {day: value / _factor_after(day, factors) for day, value in values.items()}
+    for before, after in zip(days, days[1:], strict=False):
+        if not number("0.5") <= adjusted[after] / adjusted[before] <= number("1.5"):
+            raise SafetyError("nav_discontinuity_requires_review")
+    return adjusted
 
 
 def _factor_after(day, factors):
