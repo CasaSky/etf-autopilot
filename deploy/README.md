@@ -107,6 +107,16 @@ call AWS or create resources. They check paper mode, private/CAS-protected state
 IAM scope, scheduler trust, retry limits, opt-in scheduling and stopping the worker.
 Provider downloads require internet access. There is no deployment step in CI.
 
+After a provider upgrade, refresh the official checksums for both the contributor
+platform and CI before committing the lock file:
+
+```sh
+terraform -chdir=deploy providers lock -platform=darwin_arm64 -platform=linux_amd64
+```
+
+CI keeps the lock read-only; a Linux installation needs its own unpacked-package
+checksum as well as the signed archive checksums.
+
 Packaging uses an allowlist of application Python sources and the paper config;
 it never zips the repository root, `.env`, local state, `.venv` or `.aws`.
 The package includes only the pure Python AWS SDK dependencies pinned with hashes
