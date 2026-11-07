@@ -13,7 +13,35 @@ UNIT = Decimal("0.000001")
 
 
 class SafetyError(Exception):
-    """Fail closed with a stable code suitable for diagnosis, never raw upstream text."""
+    """Fail closed with a stable code suitable for diagnosis, never raw upstream text.
+
+    A rejection that can point at one place in a caller-supplied file also carries
+    the physical ``line`` (1-based, as an editor counts it), the ``column`` name and
+    the observation ``period``. The rejected value itself is never copied into the
+    message: a diagnosis may be printed, logged or retained.
+    """
+
+    def __init__(self, code, *, line=None, column=None, period=None):
+        super().__init__(code)
+        self.code = code
+        self.line = line
+        self.column = column
+        self.period = period
+
+    def __str__(self):
+        text = self.code
+        if self.line is not None:
+            text = f"{text} at line {self.line}"
+        if self.column is not None:
+            text = f"{text} (column {self.column})"
+        if self.period is not None:
+            text = f"{text} (period {self.period})"
+        return text
+
+    def location(self):
+        """Return only the positions that are known; empty when nothing is."""
+        found = {"line": self.line, "column": self.column, "period": self.period}
+        return {key: value for key, value in found.items() if value is not None}
 
 
 def number(value) -> Decimal:

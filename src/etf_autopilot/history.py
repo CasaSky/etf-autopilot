@@ -338,49 +338,156 @@ def validate_issuer_provenance(manifest):
                 raise SafetyError("invalid_provider_source_hash")
 
 
+def _period_name(month):
+    year, offset = divmod(month - 1, 12)
+    return f"{year:04d}-{offset + 1:02d}"
+
+
+def _first_column_difference(found):
+    found = list(found or [])
+    for index, expected in enumerate(COLUMNS):
+        if index >= len(found) or found[index] != expected:
+            return expected
+    return "extra_column"
+
+
+def _timestamp(row, column, line, period):
+    try:
+        return instant(row[column])
+    except SafetyError as exc:
+        raise SafetyError(exc.code, line=line, column=column, period=period) from None
+
+
+def _index(row, column, line, period):
+    try:
+        return number(row[column])
+    except SafetyError as exc:
+        raise SafetyError(exc.code, line=line, column=column, period=period) from None
+
+
+def _missing_period(months):
+    present = set(months)
+    for month in range(months[0], months[-1] + 1):
+        if month not in present:
+            return _period_name(month)
+    return None
+
+
+def _detected_line(raw, reader, exc):
+    """Locate a CSV syntax error: the reader reports the last line it completed.
+
+    A quote error surfaces one line after that, so the position is checked against
+    the file's own length instead of being claimed blindly.
+    """
+    if not isinstance(exc, csv.Error) or reader is None:
+        return None
+    lines = raw.count(b"\n") + (not raw.endswith(b"\n"))
+    candidate = reader.line_num + 1
+    return candidate if candidate <= lines else None
+
+
 def _rows_from_csv(raw, manifest):
+    """Parse one monthly CSV; a rejection names its line and column, never its value.
+
+    Line numbers are the physical lines of the decoded file (``csv`` reports them),
+    so a quoted field containing a newline does not shift the reported position.
+    """
     if len(raw) > MAX_IMPORT_BYTES:
         raise SafetyError("history_import_size_limit")
+    reader = None
     try:
         reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig")), strict=True)
         if reader.fieldnames != list(COLUMNS):
-            raise SafetyError("history_csv_columns_mismatch")
+            raise SafetyError(
+                "history_csv_columns_mismatch",
+                line=1,
+                column=_first_column_difference(reader.fieldnames),
+            )
         grouped = {}
         seen = set()
         for index, row in enumerate(reader):
+            line = reader.line_num
             if index >= MAX_PERIODS * 2:
-                raise SafetyError("history_period_limit")
+                raise SafetyError("history_period_limit", line=line)
             if set(row) != set(COLUMNS) or any(value is None for value in row.values()):
-                raise SafetyError("malformed_history_row")
+                raise SafetyError("malformed_history_row", line=line)
             period, asset = row["period"], row["asset_id"]
-            month = period_number(period)
+            try:
+                month = period_number(period)
+            except SafetyError as exc:
+                raise SafetyError(exc.code, line=line, column="period") from None
             if asset not in manifest["instruments"]:
-                raise SafetyError("history_asset_not_in_manifest")
+                raise SafetyError(
+                    "history_asset_not_in_manifest",
+                    line=line,
+                    column="asset_id",
+                    period=period,
+                )
             if (period, asset) in seen:
-                raise SafetyError("duplicate_history_observation")
+                raise SafetyError(
+                    "duplicate_history_observation",
+                    line=line,
+                    column="asset_id",
+                    period=period,
+                )
             seen.add((period, asset))
-            signal = instant(row["signal_at"])
-            available = instant(row["available_at"])
-            execution = instant(row["execution_at"])
+            signal = _timestamp(row, "signal_at", line, period)
+            available = _timestamp(row, "available_at", line, period)
+            execution = _timestamp(row, "execution_at", line, period)
             if signal.year * 12 + signal.month != month:
-                raise SafetyError("signal_period_mismatch")
+                raise SafetyError(
+                    "signal_period_mismatch", line=line, column="signal_at", period=period
+                )
             if execution.year * 12 + execution.month != month + 1:
-                raise SafetyError("execution_must_be_in_following_month")
+                raise SafetyError(
+                    "execution_must_be_in_following_month",
+                    line=line,
+                    column="execution_at",
+                    period=period,
+                )
             if not signal <= available < execution:
-                raise SafetyError("history_not_available_before_execution")
+                raise SafetyError(
+                    "history_not_available_before_execution",
+                    line=line,
+                    column="available_at",
+                    period=period,
+                )
             if execution - signal > timedelta(days=7):
-                raise SafetyError("history_execution_gap_exceeds_seven_days")
+                raise SafetyError(
+                    "history_execution_gap_exceeds_seven_days",
+                    line=line,
+                    column="execution_at",
+                    period=period,
+                )
             calendar_dates = manifest.get("provenance", {}).get("execution_dates")
             if calendar_dates is not None and (
                 period not in calendar_dates
                 or execution != instant(calendar_dates[period] + "T23:59:59Z")
             ):
-                raise SafetyError("history_execution_calendar_mismatch")
+                raise SafetyError(
+                    "history_execution_calendar_mismatch",
+                    line=line,
+                    column="execution_at",
+                    period=period,
+                )
             if execution > instant(manifest["retrieved_at"]):
-                raise SafetyError("history_execution_after_retrieval")
-            values = [number(row[name]) for name in ("signal_index", "execution_index")]
-            if any(not number("0.000001") <= value <= number("1000000000") for value in values):
-                raise SafetyError("invalid_total_return_index")
+                raise SafetyError(
+                    "history_execution_after_retrieval",
+                    line=line,
+                    column="execution_at",
+                    period=period,
+                )
+            values = [
+                _index(row, name, line, period) for name in ("signal_index", "execution_index")
+            ]
+            for column, value in zip(("signal_index", "execution_index"), values, strict=True):
+                if not number("0.000001") <= value <= number("1000000000"):
+                    raise SafetyError(
+                        "invalid_total_return_index",
+                        line=line,
+                        column=column,
+                        period=period,
+                    )
             times = {
                 "signal_at": signal.isoformat(),
                 "available_at": available.isoformat(),
@@ -389,25 +496,40 @@ def _rows_from_csv(raw, manifest):
             period_row = grouped.setdefault(
                 period, {"period": period, **times, "signals": {}, "executions": {}}
             )
-            if any(period_row[name] != value for name, value in times.items()):
-                raise SafetyError("unaligned_history_observations")
+            for name, value in times.items():
+                if period_row[name] != value:
+                    raise SafetyError(
+                        "unaligned_history_observations",
+                        line=line,
+                        column=name,
+                        period=period,
+                    )
             period_row["signals"][asset] = str(values[0])
             period_row["executions"][asset] = str(values[1])
-    except (UnicodeError, csv.Error, TypeError, KeyError):
-        raise SafetyError("malformed_history_csv") from None
+    except (UnicodeError, csv.Error, TypeError, KeyError) as exc:
+        raise SafetyError("malformed_history_csv", line=_detected_line(raw, reader, exc)) from None
     rows = [grouped[period] for period in sorted(grouped)]
     if len(rows) < 12:
         raise SafetyError("history_requires_warmup_and_two_valuations")
     months = [period_number(row["period"]) for row in rows]
     if months != list(range(months[0], months[-1] + 1)):
-        raise SafetyError("history_month_gap_no_imputation")
+        raise SafetyError("history_month_gap_no_imputation", period=_missing_period(months))
     calendar_dates = manifest.get("provenance", {}).get("execution_dates")
     if calendar_dates is not None and set(calendar_dates) != set(grouped):
-        raise SafetyError("history_execution_calendar_coverage_mismatch")
+        difference = sorted(set(calendar_dates) ^ set(grouped))
+        raise SafetyError(
+            "history_execution_calendar_coverage_mismatch",
+            column="period",
+            period=difference[0] if difference else None,
+        )
     assets = set(manifest["instruments"])
     for row in rows:
         if set(row["signals"]) != assets or set(row["executions"]) != assets:
-            raise SafetyError("missing_history_asset_observation")
+            raise SafetyError(
+                "missing_history_asset_observation",
+                column="asset_id",
+                period=row["period"],
+            )
     return rows
 
 

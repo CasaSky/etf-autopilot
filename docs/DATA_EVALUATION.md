@@ -97,6 +97,18 @@ Imports are bounded to 5 MB and 1,200 monthly periods. Normalized datasets retai
 source/configuration hashes and a content-derived ID and are revalidated on use.
 An existing output file with different content cannot be overwritten.
 
+A rejection that belongs to one record names its position, so a long export can be
+corrected without guessing: the physical line of the decoded file, the column that
+failed and, where it is known, the observation period. Examples are
+`invalid_total_return_index at line 4 (column execution_index) (period 2022-02)`,
+`history_month_gap_no_imputation (period 2023-05)` and
+`history_csv_columns_mismatch at line 1 (column asset_id)`. Lines are counted as an
+editor counts them, so a blank line or a quoted field does not shift the reported
+position. Cell contents are never repeated in a diagnosis, which may be printed,
+logged or retained; only the stable code, the position and the period appear. The
+CLI prints the same information as `code`, `location` and `detail` in its blocked
+receipt, and nothing is written when an import is rejected.
+
 ## Chronological evaluation protocol
 
 A protocol fixes dataset identity, the complete research config hash, engine source

@@ -472,8 +472,16 @@ def main(argv=None):
         print(json.dumps(summary(state), indent=2) if args.json else markdown(state))
         return 0
     except (SafetyError, ValueError, KeyError, OSError) as exc:
-        code = str(exc) if isinstance(exc, SafetyError) else "invalid_local_input_or_state"
-        print(json.dumps({"status": "blocked", "code": code}))
+        if isinstance(exc, SafetyError):
+            blocked = {"status": "blocked", "code": exc.code}
+            location = exc.location()
+            if location:
+                # Locate the rejected input without repeating any of its values.
+                blocked["location"] = location
+                blocked["detail"] = str(exc)
+        else:
+            blocked = {"status": "blocked", "code": "invalid_local_input_or_state"}
+        print(json.dumps(blocked))
         return 2
 
 
