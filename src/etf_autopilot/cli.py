@@ -156,6 +156,10 @@ def main(argv=None):
     forward_abandon.add_argument("decision_id")
     forward_report = commands.add_parser("forward-report", help="Inspect a forward research trial")
     forward_report.add_argument("--json", action="store_true")
+    status = commands.add_parser(
+        "forward-status", help="Read current freshness, budgets and next operator action"
+    )
+    status.add_argument("--json", action="store_true")
     commands.add_parser(
         "forward-reconcile", help="Reconcile confirmed research fills without retry"
     )
@@ -191,6 +195,16 @@ def main(argv=None):
             )
 
             store = LocalStore(args.state)
+            if args.command == "forward-status":
+                from .forward_operations import forward_status, forward_status_markdown
+
+                state = store.read()
+                print(
+                    json.dumps(forward_status(state), indent=2)
+                    if args.json
+                    else forward_status_markdown(state)
+                )
+                return 0
             if args.command == "forward-tick":
                 from .forward_tick import run_forward_tick
 

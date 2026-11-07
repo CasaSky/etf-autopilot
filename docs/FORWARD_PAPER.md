@@ -76,6 +76,7 @@ etf-autopilot --config var/trial/config.json --state var/trial/paper.sqlite3 \
 
 etf-autopilot --state var/trial/paper.sqlite3 forward-report
 etf-autopilot --state var/trial/paper.sqlite3 forward-report --json
+etf-autopilot --state var/trial/paper.sqlite3 forward-status
 ```
 
 `decision_committed` places no order. Supply a subsequent verified daily artifact
@@ -83,6 +84,13 @@ to settle it. `waiting_for_future_observation` is expected; `waiting_for_input`
 explains a missing/stale-input gate. No command fabricates a future value.
 The default forward state is `var/forward-paper.sqlite3`, separate from the
 original paper demo. Historical configs remain rejected by the ordinary engine.
+
+`forward-status` is a read-only operating diagnosis using the current runtime
+clock. It explains input age, remaining monthly reservations and the next operator
+action. Unknown model outcomes, reconciliation and code review take priority over
+ordinary stale-data waits. Inspecting status never expires a decision, clears a
+halt, calls a provider or advances financial state. Add `--json` for structured
+output; a successful diagnosis exits with code 0 even when it describes a wait.
 
 The original default sizing policy still rejects oversized plans. An explicit
 `execution.sizing_policy: bounded` can be evaluated in a separate config as
