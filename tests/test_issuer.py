@@ -103,6 +103,44 @@ def test_benchmark_values_can_never_replace_missing_fund_observations(exports):
     assert not (exports / "rejected").exists()
 
 
+def test_observed_camel_case_header_preserves_all_financial_values(exports):
+    path = exports / "bond.xls"
+    before = read_issuer(path)
+
+    def rename(root):
+        root.find(SS + "Worksheet").set(SS + "Name", "fundHeader")
+
+    xml_change(path, rename)
+    after = read_issuer(path)
+    assert after["raw_sha256"] != before["raw_sha256"]
+    assert {k: v for k, v in after.items() if k != "raw_sha256"} == {
+        k: v for k, v in before.items() if k != "raw_sha256"
+    }
+
+
+def test_header_alias_cannot_hide_a_duplicate_financial_sheet(exports):
+    from copy import deepcopy
+
+    def duplicate(root):
+        alias = deepcopy(root.find(SS + "Worksheet"))
+        alias.set(SS + "Name", "fundHeader")
+        root.insert(1, alias)
+
+    xml_change(exports / "bond.xls", duplicate)
+    with pytest.raises(SafetyError, match="duplicate_issuer_financial_sheet"):
+        read_issuer(exports / "bond.xls")
+
+
+@pytest.mark.parametrize("name", ["FundHeader", "fundheader"])
+def test_unreviewed_header_names_are_not_fuzzily_matched(exports, name):
+    def rename(root):
+        root.find(SS + "Worksheet").set(SS + "Name", name)
+
+    xml_change(exports / "bond.xls", rename)
+    with pytest.raises(SafetyError, match="issuer_financial_prefix_required"):
+        read_issuer(exports / "bond.xls")
+
+
 def test_benchmark_change_leaves_fund_values_unchanged_but_changes_vintage_hash(exports):
     before = convert(exports)
 

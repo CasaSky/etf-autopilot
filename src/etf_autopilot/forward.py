@@ -33,6 +33,8 @@ def trial_engine_fingerprint():
         "paper.py",
         "strategy.py",
         "observations.py",
+        "issuer.py",
+        "providers.py",
         "history.py",
         "nav.py",
     )

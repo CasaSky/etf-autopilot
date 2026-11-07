@@ -131,6 +131,26 @@ def test_config_cannot_change_after_committing_a_decision(store, config, daily):
     assert store.read() == before
 
 
+@pytest.mark.parametrize("module", ["issuer.py", "providers.py"])
+def test_changed_source_interpretation_requires_review_before_more_orders(
+    store, config, daily, monkeypatch, module
+):
+    from pathlib import Path
+
+    commit(store, config, daily)
+    before = store.read()
+    original = Path.read_bytes
+
+    def changed(path):
+        value = original(path)
+        return value + b"\n# changed interpretation" if path.name == module else value
+
+    monkeypatch.setattr(Path, "read_bytes", changed)
+    with pytest.raises(SafetyError, match="forward_trial_engine_changed_review_required"):
+        run_forward_cycle(store, config, later(daily), now=at("2026-01-10T09:00:00Z"))
+    assert store.read() == before
+
+
 def test_freshness_applies_to_selected_execution_date_not_only_latest_row(store, config, daily):
     commit(store, config, daily)
     batch = append(daily, "2026-01-12", "2026-01-13T08:00:00Z")

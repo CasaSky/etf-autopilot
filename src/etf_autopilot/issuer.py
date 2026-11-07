@@ -107,6 +107,8 @@ def read_issuer(path, *, reviewed_share_class_launch_date=None):
             if action != "end" or element.tag != SS + "Worksheet":
                 continue
             name = element.get(SS + "Name")
+            # Both exact names are observed issuer layouts, not fuzzy aliases.
+            name = "Fund Header" if name == "fundHeader" else name
             if name in targets:
                 if name in sheets:
                     raise SafetyError("duplicate_issuer_financial_sheet")

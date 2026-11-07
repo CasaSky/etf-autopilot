@@ -102,6 +102,9 @@ hashes, reference FX, exclusions, normalization and timing policies. The parser
 hashes the entire original file but reads only its completed financial prefix;
 malformed financial XML fails and later holdings XML is not parsed or repaired.
 UTF-8, document size, row, date, value and entity constraints are enforced.
+The header sheet accepts the observed exact names `Fund Header` and `fundHeader`.
+Both map to one required sheet; duplicates across these names fail, and other
+spellings are not guessed. Fund-column, ISIN and currency checks remain mandatory.
 
 ## Accumulating NAV and share splits
 
