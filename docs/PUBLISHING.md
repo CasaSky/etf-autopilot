@@ -16,7 +16,8 @@ Every upstream branch requires GitHub-verified commit signatures, including owne
 pushes. The signature ruleset has no bypass actors. Verify the signing key is
 registered on the correct GitHub account before creating commits.
 
-The default workflow runs on owner pushes to `main`. It has no pull request or
+The default workflow runs on owner pushes to upstream branches, including branches
+with an owner-created PR. It has no pull request or
 manual trigger, and checks both the original actor and the actor requesting a
 rerun. All external fork workflows require approval in repository settings.
 Workflow tokens are read-only, Actions cannot approve pull requests, and automatic

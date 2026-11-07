@@ -7,7 +7,9 @@ a clear outcome. No broker account, cloud subscription or model access is needed
 Anyone can open an issue or submit a pull request from a fork. The repository owner,
 [@CasaSky](https://github.com/CasaSky), controls branch updates and merges. Pull
 requests do not start this repository's workflows. CI runs only after the owner
-pushes to `main`; include your local verification results in the pull request.
+pushes a branch in this repository, so the owner's PRs receive checks. A co-author
+trailer grants no execution permission. Include local verification results in
+outside pull requests.
 
 ## Set up development
 

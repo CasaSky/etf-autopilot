@@ -231,6 +231,11 @@ run "forward_preparation_keeps_worker_and_schedules_stopped" {
   assert {
     condition = (
       aws_sns_topic_subscription.forward_alerts[0].protocol == "email" &&
+      toset(jsondecode(aws_sns_topic_policy.forward_alerts[0].policy).Statement[0].Action) == toset([
+        "sns:GetTopicAttributes", "sns:SetTopicAttributes", "sns:AddPermission", "sns:RemovePermission",
+        "sns:DeleteTopic", "sns:Subscribe", "sns:ListSubscriptionsByTopic", "sns:Publish"
+      ]) &&
+      jsondecode(aws_sns_topic_policy.forward_alerts[0].policy).Statement[0].Principal.AWS == "arn:aws:iam::${var.aws_account_id}:root" &&
       jsondecode(aws_sns_topic_policy.forward_alerts[0].policy).Statement[1].Condition.StringEquals["aws:SourceAccount"] == var.aws_account_id &&
       toset(jsondecode(aws_sns_topic_policy.forward_alerts[0].policy).Statement[1].Condition.ArnEquals["aws:SourceArn"]) == toset([
         "arn:aws:cloudwatch:${var.aws_region}:${var.aws_account_id}:alarm:${aws_cloudwatch_metric_alarm.forward_worker_errors[0].alarm_name}",

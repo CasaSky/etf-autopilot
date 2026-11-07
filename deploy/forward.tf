@@ -82,8 +82,12 @@ resource "aws_sns_topic_policy" "forward_alerts" {
         Sid       = "OwnAccountTopicManagement"
         Effect    = "Allow"
         Principal = { AWS = "arn:aws:iam::${var.aws_account_id}:root" }
-        Action    = "SNS:*"
-        Resource  = aws_sns_topic.forward_alerts[0].arn
+        Action = [
+          "sns:GetTopicAttributes", "sns:SetTopicAttributes", "sns:AddPermission",
+          "sns:RemovePermission", "sns:DeleteTopic", "sns:Subscribe",
+          "sns:ListSubscriptionsByTopic", "sns:Publish"
+        ]
+        Resource = aws_sns_topic.forward_alerts[0].arn
       },
       {
         Sid       = "OwnPaperAlarms"
